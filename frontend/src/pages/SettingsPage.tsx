@@ -11,6 +11,7 @@ import { getProfile, updateProfile, getUser, apiService } from "@/lib/api";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ImageCropper } from "@/components/ui/ImageCropper";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/useAuth";
 
 const SettingsPage = () => {
   const [loading, setLoading] = useState(true);
@@ -18,6 +19,7 @@ const SettingsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const { toast } = useToast();
+  const { refreshUser } = useAuth();
   
   // User Profile Section
   const [name, setName] = useState("");
@@ -179,6 +181,12 @@ const SettingsPage = () => {
           const updatedUser = { ...currentUser, avatarUrl: response.fullAvatarUrl };
           localStorage.setItem('replycraft_user', JSON.stringify(updatedUser));
         }
+        
+        // Refresh auth context to update avatar in navbar
+        await refreshUser();
+        
+        // Dispatch event for other components
+        window.dispatchEvent(new Event('user_profile_updated'));
       } else {
         toast({ variant: "destructive", title: "Failed to upload avatar" });
       }

@@ -8,6 +8,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -125,8 +126,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     window.location.href = '/login';
   };
 
+  // Refresh user data from backend
+  const refreshUser = async () => {
+    try {
+      const response = await apiService.getProfile();
+      if (response.success) {
+        const currentUser = apiService.getUser() || {};
+        const updatedUser = {
+          ...currentUser,
+          name: response.name || currentUser.name,
+          avatarUrl: response.avatarUrl || currentUser.avatarUrl,
+        };
+        localStorage.setItem('replycraft_user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+      }
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

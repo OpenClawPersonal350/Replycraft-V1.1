@@ -45,12 +45,27 @@ export function ImageCropper({ src, onCropComplete, onCancel }: ImageCropperProp
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && handleCancel()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Crop Image</DialogTitle>
+      <DialogContent 
+        className="sm:max-w-[500px] p-0 overflow-hidden"
+        style={{
+          borderRadius: '16px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        }}
+      >
+        {/* Header */}
+        <DialogHeader className="px-6 pt-6 pb-2">
+          <DialogTitle className="text-xl font-semibold text-gray-900">
+            Upload Photo
+          </DialogTitle>
         </DialogHeader>
-        
-        <div className="relative w-full h-64 bg-black/10 rounded-lg overflow-hidden my-4">
+
+        {/* Crop Area with circular mask */}
+        <div 
+          className="relative w-full h-80 bg-gray-900 overflow-hidden mx-auto"
+          style={{
+            background: 'rgba(0, 0, 0, 0.6)',
+          }}
+        >
           <Cropper
             image={src}
             crop={crop}
@@ -61,27 +76,64 @@ export function ImageCropper({ src, onCropComplete, onCancel }: ImageCropperProp
             onCropChange={setCrop}
             onCropComplete={handleCropComplete}
             onZoomChange={setZoom}
-          />
-        </div>
-        
-        <div className="flex items-center space-x-4 mb-4">
-          <span className="text-sm font-medium">Zoom</span>
-          <Slider
-            value={[zoom]}
-            min={1}
-            max={3}
-            step={0.1}
-            onValueChange={(val) => setZoom(val[0])}
-            className="w-full"
+            style={{
+              containerStyle: {
+                background: 'transparent',
+              },
+              cropAreaStyle: {
+                border: '3px solid white',
+                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
+              },
+            }}
           />
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleCancel} disabled={isLoading}>
+        {/* Drag hint */}
+        <p className="text-center text-sm text-gray-500 mt-2">
+          Drag image to reposition
+        </p>
+
+        {/* Zoom Slider */}
+        <div className="px-6 py-4">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium text-gray-700 w-12">Zoom</span>
+            <Slider
+              value={[zoom]}
+              min={1}
+              max={3}
+              step={0.1}
+              onValueChange={(val) => setZoom(val[0])}
+              className="flex-1"
+            />
+            <span className="text-sm text-gray-500 w-8 text-right">
+              {Math.round(zoom * 100)}%
+            </span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <DialogFooter className="px-6 pb-6 pt-2 gap-3">
+          <Button 
+            variant="outline" 
+            onClick={handleCancel} 
+            disabled={isLoading}
+            className="flex-1 h-11"
+          >
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isLoading || !croppedAreaPixels}>
-            {isLoading ? "Saving..." : "Save Image"}
+          <Button 
+            onClick={handleSave} 
+            disabled={isLoading || !croppedAreaPixels}
+            className="flex-1 h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white border-0"
+          >
+            {isLoading ? (
+              <>
+                <span className="animate-pulse mr-2">●</span>
+                Saving...
+              </>
+            ) : (
+              'Save Image'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
