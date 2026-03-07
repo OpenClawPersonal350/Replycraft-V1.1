@@ -4,12 +4,12 @@
  */
 
 const { createBullBoard } = require('@bull-board/api');
-const { BullAdapter } = require('@bull-board/express');
+const { ExpressAdapter } = require('@bull-board/express');
 const { replyQueue } = require('../queues/reply.queue');
 
 // Create Bull adapters for each queue
 const bullAdapters = [
-  new BullAdapter(replyQueue, { readOnlyMode: false })
+  new ExpressAdapter(replyQueue, { readOnlyMode: false })
 ];
 
 // Create Bull Board instance
