@@ -14,7 +14,6 @@ const path = require('path');
 const fs = require('fs');
 const logger = require('./utils/logger');
 const { generalLimiter, authLimiter, aiLimiter } = require('./middleware/rateLimiter');
-const { bullBoardRouter } = require('./config/bullBoard');
 const { getHealth, getQueueMetrics } = require('./controllers/health.controller');
 const { sendTestEmail, getEmailStatus } = require('./controllers/test.controller');
 const { validateEmailConfig } = require('./config/emailValidator');
@@ -99,9 +98,6 @@ app.get('/api/health', getHealth);
 
 // Queue metrics endpoint
 app.get('/api/health/queue', getQueueMetrics);
-
-// Admin queue dashboard (Bull Board)
-app.use('/admin/queues', bullBoardRouter);
 
 // Test endpoints (protected)
 app.post('/api/test/email', authMiddleware, sendTestEmail);
