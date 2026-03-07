@@ -4,14 +4,41 @@ const cleanReplyUtil = require('../utils/cleanReply');
 const config = require('../config/config');
 const Review = require('../models/Review');
 const RestaurantProfile = require('../models/RestaurantProfile');
+const logger = require('../utils/logger');
 
 /**
  * Process review - check limits, generate reply, handle approval mode
+ * IDEMPOTENCY: Checks if review already processed before generating AI reply
  */
 const processReview = async (req, res) => {
   try {
-    const { review, model } = req.body;
+    const { review, reviewId, model } = req.body;
     const user = req.user;
+
+    // IDEMPOTENCY: Check if review already processed
+    if (reviewId) {
+      const existingReview = await Review.findOne({ 
+        userId: user._id,
+        reviewId: reviewId 
+      });
+      
+      if (existingReview) {
+        if (existingReview.status === 'processed' || existingReview.status === 'pending_approval') {
+          logger.warn('Duplicate review skipped - already processed', {
+            userId: user._id,
+            reviewId: reviewId,
+            status: existingReview.status
+          });
+          
+          return res.status(200).json({
+            ignored: true,
+            reason: 'duplicate review',
+            status: existingReview.status,
+            existingReply: existingReview.replyText
+          });
+        }
+      }
+    }
 
     // Validate required field
     if (!review || typeof review !== 'string') {
@@ -41,7 +68,10 @@ const processReview = async (req, res) => {
     const usageInfo = user.checkDailyLimit();
     
     if (usageInfo.exceeded) {
-      console.log(`[Review] Daily limit reached for user: ${user._id}, plan: ${user.plan}`);
+      logger.warn('Daily limit reached for user', { 
+        userId: user._id, 
+        plan: user.plan 
+      });
       
       return res.status(200).json({
         ignored: true,
@@ -67,14 +97,18 @@ const processReview = async (req, res) => {
         isActive: true 
       });
     } catch (error) {
-      console.log('No restaurant profile found, using defaults');
+      logger.info('No restaurant profile found, using defaults', { userId: user._id });
     }
 
     // Determine reply mode (default: auto)
     const replyMode = restaurantProfile?.replyMode || 'auto';
 
-    // Log the request
-    console.log(`[${new Date().toISOString()}] Processing review | User: ${user._id} | Model: ${requestedModel} | Mode: ${replyMode}`);
+    logger.logAI('Processing review', { 
+      userId: user._id, 
+      reviewId,
+      model: requestedModel, 
+      mode: replyMode 
+    });
 
     // Build prompt with restaurant context
     const prompt = promptService.buildPrompt(review, restaurantProfile);

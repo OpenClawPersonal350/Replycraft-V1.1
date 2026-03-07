@@ -6,6 +6,7 @@ const ollamaService = require('../services/ollama.service');
 const promptService = require('../services/prompt.service');
 const cleanReplyUtil = require('../utils/cleanReply');
 const config = require('../config/config');
+const logger = require('../utils/logger');
 
 // Import platform services
 const googleReviewsService = require('../services/googleReviews.service');
@@ -28,26 +29,28 @@ const aiWorker = new Worker('reply-generation', async (job) => {
   }
 });
 
+logger.info('[AIWorker] AI Worker started', { concurrency: 3 });
+
 /**
  * Process a reply generation job
  */
 async function processReplyJob(job) {
   const { reviewId, userId, platform, entityType, reviewText, rating } = job.data;
   
-  console.log(`[AIWorker] Processing job ${job.id} for review: ${reviewId}, platform: ${platform}`);
+  logger.logAI('AI job started', { jobId: job.id, reviewId, platform });
 
   try {
     // Fetch review from database
     const review = await Review.findOne({ reviewId });
     
     if (!review) {
-      console.log(`[AIWorker] Review not found: ${reviewId}`);
+      logger.logAI('Review not found, skipping', { reviewId });
       return;
     }
 
     // Check if already processed
     if (review.status === 'processed' || review.status === 'pending_approval') {
-      console.log(`[AIWorker] Review already processed: ${reviewId}`);
+      logger.logAI('Review already processed, skipping', { reviewId, status: review.status });
       return;
     }
 
@@ -55,7 +58,7 @@ async function processReplyJob(job) {
     const user = await User.findById(userId);
     
     if (!user || !user.isActive) {
-      console.log(`[AIWorker] User not found or inactive: ${userId}`);
+      logger.warn('[AIWorker] User not found or inactive', { userId });
       await Review.findByIdAndUpdate(review._id, { status: 'failed' });
       return;
     }
@@ -68,7 +71,7 @@ async function processReplyJob(job) {
         isActive: true 
       });
     } catch (error) {
-      console.log('[AIWorker] No restaurant profile found, using defaults');
+      logger.info('No restaurant profile found, using defaults', { userId });
     }
 
     // Determine reply mode
@@ -78,7 +81,7 @@ async function processReplyJob(job) {
     const usageInfo = user.checkDailyLimit();
     
     if (usageInfo.exceeded) {
-      console.log(`[AIWorker] Daily limit exceeded for user: ${userId}`);
+      logger.warn('Daily AI usage limit exceeded', { userId, limit: usageInfo.limit, used: usageInfo.used });
       await Review.findByIdAndUpdate(review._id, { status: 'ignored' });
       return;
     }
@@ -99,7 +102,7 @@ async function processReplyJob(job) {
         replyPostedAt: new Date()
       });
       
-      console.log(`[AIWorker] AI reply generated and posted for review: ${reviewId}`);
+      logger.logAI('AI reply generated and posted', { reviewId, status: 'processed' });
     } else {
       // Manual mode - save for approval
       await Review.findByIdAndUpdate(review._id, {
@@ -107,18 +110,18 @@ async function processReplyJob(job) {
         status: 'pending_approval'
       });
       
-      console.log(`[AIWorker] AI reply generated, awaiting approval for review: ${reviewId}`);
+      logger.logAI('AI reply generated, awaiting approval', { reviewId, status: 'pending_approval' });
     }
 
     // Increment usage
     await user.incrementUsage();
-
-    console.log(`[AIWorker] AI reply generated for review: ${reviewId}`);
+    
+    logger.logAI('AI job completed', { reviewId, replyMode });
     
     return { success: true, reviewId, status: replyMode === 'auto' ? 'processed' : 'pending_approval' };
 
   } catch (error) {
-    console.error(`[AIWorker] Error processing review ${reviewId}:`, error.message);
+    logger.error('AI job failed', { jobId: job.id, reviewId, error: error.message, stack: error.stack });
     
     // Update review status to failed
     try {
@@ -127,7 +130,7 @@ async function processReplyJob(job) {
         { status: 'failed' }
       );
     } catch (updateError) {
-      console.error(`[AIWorker] Failed to update review status:`, updateError.message);
+      logger.error('Failed to update review status', { reviewId, error: updateError.message });
     }
     
     throw error; // Re-throw to trigger retry
@@ -151,10 +154,10 @@ async function postReplyToPlatform(platform, review, replyText) {
     case 'appstore':
     case 'playstore':
       // App store reviews typically don't support replies via API
-      console.log(`[AIWorker] Platform ${platform} doesn't support API replies`);
+      logger.info(`Platform ${platform} doesn't support API replies`);
       break;
     default:
-      console.log(`[AIWorker] Unknown platform: ${platform}`);
+      logger.warn(`Unknown platform: ${platform}`);
   }
 }
 
@@ -168,10 +171,10 @@ async function postToGoogle(review, replyText) {
     
     if (connection && connection.isActive) {
       await googleReviewsService.postReply(connection, review.reviewId, replyText);
-      console.log(`[AIWorker] Reply posted to Google: ${review.reviewId}`);
+      logger.logAI('Reply posted to Google', { reviewId: review.reviewId });
     }
   } catch (error) {
-    console.error(`[AIWorker] Error posting to Google:`, error.message);
+    logger.error('Error posting to Google', { reviewId: review.reviewId, error: error.message });
     throw error;
   }
 }
@@ -181,7 +184,7 @@ async function postToGoogle(review, replyText) {
  */
 async function postToYelp(review, replyText) {
   // TODO: Implement Yelp API integration
-  console.log(`[AIWorker] Yelp integration not implemented yet`);
+  logger.info('Yelp integration not implemented yet');
 }
 
 /**
@@ -189,25 +192,25 @@ async function postToYelp(review, replyText) {
  */
 async function postToTripAdvisor(review, replyText) {
   // TODO: Implement TripAdvisor API integration
-  console.log(`[AIWorker] TripAdvisor integration not implemented yet`);
+  logger.info('TripAdvisor integration not implemented yet');
 }
 
 // Worker events
 aiWorker.on('completed', (job) => {
-  console.log(`[AIWorker] Job ${job.id} completed`);
+  logger.logAI('Job completed', { jobId: job.id });
 });
 
-aiWorker.on('failed', (job, error) => {
-  console.error(`[AIWorker] Job ${job.id} failed:`, error.message);
+aiWorker.on('failed', (job, err) => {
+  logger.error('Job failed', { jobId: job.id, error: err.message, stack: err.stack });
 });
 
 aiWorker.on('error', (error) => {
-  console.error(` Worker error:`, error.message);
+  logger.error('Worker error', { error: error.message, stack: error.stack });
 });
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
-  console.log('[AIWorker] Shutting down gracefully...');
+  logger.info('AI Worker shutting down gracefully');
   await aiWorker.close();
   process.exit(0);
 };

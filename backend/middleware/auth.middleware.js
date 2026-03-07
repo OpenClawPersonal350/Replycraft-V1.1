@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/config');
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 /**
  * Verify JWT token and attach user to request
@@ -39,6 +40,14 @@ const authMiddleware = async (req, res, next) => {
       });
     }
     
+    // Check and sync subscription status (downgrade if expired)
+    await user.syncSubscriptionStatus();
+    
+    // Reload user after potential plan change
+    if (user.isModified('plan')) {
+      await user.reload();
+    }
+    
     // Check and update daily usage (reset if new day)
     user.checkDailyLimit();
     
@@ -49,19 +58,23 @@ const authMiddleware = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
+      logger.logSecurity('Invalid JWT token', { error: error.message });
       return res.status(401).json({
         success: false,
-        error: 'Invalid token.'
+        error: 'Invalid token.',
+        code: 'INVALID_TOKEN'
       });
     }
     if (error.name === 'TokenExpiredError') {
+      logger.logSecurity('JWT token expired', { error: error.message });
       return res.status(401).json({
         success: false,
-        error: 'Token expired.'
+        message: 'Session expired. Please login again.',
+        code: 'SESSION_EXPIRED'
       });
     }
     
-    console.error('Auth Middleware Error:', error);
+    logger.error('Auth Middleware Error', { error: error.message, stack: error.stack });
     return res.status(500).json({
       success: false,
       error: 'Authentication error.'

@@ -277,6 +277,8 @@ export const disconnectGoogle = (id: string) => apiService.disconnectGoogle(id);
 export interface User {
   id: string;
   email: string;
+  name?: string;
+  avatarUrl?: string;
   plan: string;
   dailyUsage?: number;
 }

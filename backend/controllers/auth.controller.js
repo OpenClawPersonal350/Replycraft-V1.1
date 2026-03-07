@@ -1,19 +1,29 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const config = require('../config/config');
+const logger = require('../utils/logger');
+const { queueWelcomeEmail } = require('../queues/email.queue');
 
 /**
  * Register a new user
  */
 const register = async (req, res) => {
   try {
-    const { email, password, plan } = req.body;
+    const { name, email, password, plan } = req.body;
 
     // Validate required fields
-    if (!email || !password) {
+    if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Email and password are required'
+        error: 'Name, email and password are required'
+      });
+    }
+
+    // Validate name
+    if (name.trim().length < 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name is required'
       });
     }
 
@@ -31,8 +41,9 @@ const register = async (req, res) => {
       ? plan.toLowerCase() 
       : config.defaultPlan;
 
-    // Create new user
+    // Create new user with name
     const user = new User({
+      name: name.trim(),
       email: email.toLowerCase(),
       password,
       plan: userPlan
@@ -47,6 +58,18 @@ const register = async (req, res) => {
       { expiresIn: config.jwt.expiresIn }
     );
 
+    logger.logAuth('User registered', { userId: user._id, email: user.email });
+
+    // Queue welcome email (async, doesn't block API)
+    queueWelcomeEmail({
+      name: user.name,
+      email: user.email,
+      plan: user.plan,
+      dailyUsage: user.dailyUsage
+    }).catch(err => {
+      logger.error('Failed to queue welcome email', { error: err.message, userId: user._id });
+    });
+
     // Return success response (without password)
     return res.status(201).json({
       success: true,
@@ -54,6 +77,7 @@ const register = async (req, res) => {
       data: {
         user: {
           id: user._id,
+          name: user.name,
           email: user.email,
           plan: user.plan,
           dailyUsage: user.dailyUsage,
@@ -64,7 +88,7 @@ const register = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Register Error:', error);
+    logger.error('Register Error', { error: error.message, stack: error.stack });
     
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(e => e.message);
@@ -100,6 +124,7 @@ const login = async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     
     if (!user) {
+      logger.logAuth('Login failed - user not found', { email: email.toLowerCase() });
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password'
@@ -108,6 +133,7 @@ const login = async (req, res) => {
 
     // Check if user is active
     if (!user.isActive) {
+      logger.logAuth('Login failed - account deactivated', { userId: user._id });
       return res.status(403).json({
         success: false,
         error: 'Account is deactivated'
@@ -118,6 +144,7 @@ const login = async (req, res) => {
     const isMatch = await user.comparePassword(password);
     
     if (!isMatch) {
+      logger.logAuth('Login failed - invalid password', { userId: user._id });
       return res.status(401).json({
         success: false,
         error: 'Invalid email or password'
@@ -134,6 +161,8 @@ const login = async (req, res) => {
       { expiresIn: config.jwt.expiresIn }
     );
 
+    logger.logAuth('User logged in', { userId: user._id, email: user.email });
+
     // Return success response
     return res.status(200).json({
       success: true,
@@ -141,6 +170,7 @@ const login = async (req, res) => {
       data: {
         user: {
           id: user._id,
+          name: user.name,
           email: user.email,
           plan: user.plan,
           dailyUsage: user.dailyUsage,
@@ -151,7 +181,7 @@ const login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login Error:', error);
+    logger.error('Login Error', { error: error.message, stack: error.stack });
     return res.status(500).json({
       success: false,
       error: 'Failed to login'

@@ -12,17 +12,46 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Extended user type with name from profile
+interface UserWithName extends User {
+  name?: string;
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserWithName | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Fetch profile data from backend to get name and avatarUrl
+  const fetchProfile = async () => {
+    try {
+      const response = await apiService.getProfile();
+      if (response.success) {
+        const currentUser = apiService.getUser() || {};
+        // Merge profile data with existing user data
+        const updatedUser = {
+          ...currentUser,
+          name: response.name || currentUser.name,
+          avatarUrl: response.avatarUrl || currentUser.avatarUrl,
+        };
+        localStorage.setItem('replycraft_user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+        return updatedUser;
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
+    }
+    return null;
+  };
+
   useEffect(() => {
-    const initAuth = () => {
+    const initAuth = async () => {
       const token = apiService.getAuthToken();
       if (token) {
         setIsAuthenticated(true);
-        setUser(apiService.getUser());
+        // Fetch profile to get name and avatarUrl from backend
+        await fetchProfile();
+        setUser(apiService.getUser() as UserWithName);
       }
       setIsLoading(false);
     };
@@ -40,8 +69,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await apiService.login(email, password);
       if (response.success && response.token) {
         localStorage.setItem('replycraft_token', response.token);
-        localStorage.setItem('replycraft_user', JSON.stringify(response.user));
-        setUser(response.user);
+        
+        // Fetch profile to get name from backend
+        const profile = await fetchProfile();
+        
+        // Merge user data with profile data
+        const userData = {
+          ...response.user,
+          name: profile?.name || response.user?.name || email.split('@')[0],
+          avatarUrl: profile?.avatarUrl || response.user?.avatarUrl,
+        };
+        
+        localStorage.setItem('replycraft_user', JSON.stringify(userData));
+        setUser(userData);
         setIsAuthenticated(true);
         return { success: true };
       }
@@ -56,8 +96,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await apiService.register(name, email, password);
       if (response.success && response.token) {
         localStorage.setItem('replycraft_token', response.token);
-        localStorage.setItem('replycraft_user', JSON.stringify(response.user));
-        setUser(response.user);
+        
+        // Fetch profile to get name from backend
+        const profile = await fetchProfile();
+        
+        // Merge user data with profile data  
+        const userData = {
+          ...response.user,
+          name: profile?.name || name || email.split('@')[0],
+          avatarUrl: profile?.avatarUrl || response.user?.avatarUrl,
+        };
+        
+        localStorage.setItem('replycraft_user', JSON.stringify(userData));
+        setUser(userData);
         setIsAuthenticated(true);
         return { success: true };
       }

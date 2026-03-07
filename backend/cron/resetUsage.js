@@ -1,12 +1,13 @@
 const cron = require('node-cron');
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 /**
  * Reset daily usage for all users at midnight
  */
 const resetDailyUsage = async () => {
   try {
-    console.log('[Cron] Running daily usage reset...');
+    logger.info('Running daily usage reset');
     
     const result = await User.updateMany(
       { 'dailyUsage.count': { $gt: 0 } },
@@ -18,9 +19,9 @@ const resetDailyUsage = async () => {
       }
     );
     
-    console.log(`[Cron] Reset daily usage for ${result.modifiedCount} users`);
+    logger.info('Daily usage reset completed', { usersReset: result.modifiedCount });
   } catch (error) {
-    console.error('[Cron] Error resetting daily usage:', error);
+    logger.error('Error resetting daily usage', { error: error.message, stack: error.stack });
   }
 };
 
@@ -47,10 +48,10 @@ cron.schedule('0 * * * *', async () => {
     );
     
     if (result.modifiedCount > 0) {
-      console.log(`[Cron] Cleaned up ${result.modifiedCount} users with stale daily usage`);
+      logger.info('Hourly cleanup completed', { usersReset: result.modifiedCount });
     }
   } catch (error) {
-    console.error('[Cron] Error in hourly cleanup:', error);
+    logger.error('Error in hourly cleanup', { error: error.message, stack: error.stack });
   }
 });
 

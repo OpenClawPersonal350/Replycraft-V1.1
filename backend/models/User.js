@@ -3,6 +3,12 @@ const bcrypt = require('bcryptjs');
 const config = require('../config/config');
 
 const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Name is required'],
+    trim: true,
+    maxlength: [100, 'Name cannot exceed 100 characters']
+  },
   email: {
     type: String,
     required: [true, 'Email is required'],
@@ -39,6 +45,28 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  // Stripe integration fields
+  stripeCustomerId: {
+    type: String,
+    default: null
+  },
+  stripeSubscriptionId: {
+    type: String,
+    default: null
+  },
+  subscriptionStatus: {
+    type: String,
+    default: null,
+    enum: [null, 'active', 'trialing', 'past_due', 'canceled', 'unpaid']
+  },
+  subscriptionCurrentPeriodEnd: {
+    type: Date,
+    default: null
+  },
+  planExpiresAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
@@ -92,6 +120,73 @@ userSchema.methods.incrementUsage = async function() {
 userSchema.methods.resetDailyUsage = function() {
   this.dailyUsage.count = 0;
   this.dailyUsage.lastReset = new Date();
+};
+
+/**
+ * Check and sync subscription status
+ * Downgrade to free if subscription has expired
+ */
+userSchema.methods.syncSubscriptionStatus = async function() {
+  const now = new Date();
+  
+  // Check if subscription has expired
+  if (this.subscriptionCurrentPeriodEnd && this.subscriptionCurrentPeriodEnd < now) {
+    // Subscription has expired
+    if (this.plan !== 'free') {
+      console.log(`[Subscription] Expiring subscription for user ${this._id}, downgrading to free`);
+      
+      this.plan = 'free';
+      this.subscriptionStatus = 'expired';
+      this.stripeSubscriptionId = null;
+      await this.save();
+      
+      return {
+        downgraded: true,
+        reason: 'subscription_expired',
+        newPlan: 'free'
+      };
+    }
+  }
+  
+  // Check if subscription is inactive due to payment failure
+  if (this.subscriptionStatus === 'past_due' || this.subscriptionStatus === 'unpaid') {
+    // Downgrade to free until payment is resolved
+    if (this.plan !== 'free') {
+      console.log(`[Subscription] Payment issue for user ${this._id}, downgrading to free`);
+      
+      this.plan = 'free';
+      await this.save();
+      
+      return {
+        downgraded: true,
+        reason: 'payment_failed',
+        newPlan: 'free'
+      };
+    }
+  }
+  
+  return {
+    downgraded: false,
+    reason: null,
+    newPlan: this.plan
+  };
+};
+
+/**
+ * Get subscription info for API response
+ */
+userSchema.methods.getSubscriptionInfo = function() {
+  const planConfig = config.plans[this.plan] || config.plans.free;
+  
+  return {
+    plan: this.plan,
+    status: this.subscriptionStatus || (this.plan === 'free' ? 'active' : 'inactive'),
+    currentPeriodEnd: this.subscriptionCurrentPeriodEnd 
+      ? Math.floor(this.subscriptionCurrentPeriodEnd.getTime() / 1000) 
+      : null,
+    dailyLimit: planConfig.dailyLimit,
+    perMinute: planConfig.perMinute
+  };
 };
 
 module.exports = mongoose.model('User', userSchema);

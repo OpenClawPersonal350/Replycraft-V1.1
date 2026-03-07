@@ -3,6 +3,8 @@ const promptService = require('../services/prompt.service');
 const cleanReplyUtil = require('../utils/cleanReply');
 const config = require('../config/config');
 const RestaurantProfile = require('../models/RestaurantProfile');
+const logger = require('../utils/logger');
+const { queueLimitReachedEmail } = require('../queues/email.queue');
 
 /**
  * Generate professional reply to customer review (direct AI generation)
@@ -40,10 +42,28 @@ const generateReply = async (req, res) => {
     const usageInfo = user.checkDailyLimit();
     
     if (usageInfo.exceeded) {
+      logger.logWarn('Daily AI usage limit exceeded', { 
+        userId: user._id, 
+        plan: user.plan,
+        limit: usageInfo.limit,
+        used: usageInfo.used
+      });
+
+      // Queue limit reached email (async, doesn't block API)
+      queueLimitReachedEmail({
+        name: user.name,
+        email: user.email,
+        plan: user.plan,
+        dailyUsage: usageInfo
+      }).catch(err => {
+        logger.error('Failed to queue limit reached email', { error: err.message, userId: user._id });
+      });
+
       return res.status(429).json({
         success: false,
-        error: 'Daily limit exceeded for your plan',
-        usage: usageInfo
+        message: 'Daily AI usage limit reached. Upgrade your plan for more generation.',
+        usage: usageInfo,
+        upgradeUrl: '/dashboard/upgrade'
       });
     }
 
@@ -61,11 +81,17 @@ const generateReply = async (req, res) => {
       });
     } catch (error) {
       // Continue without profile if lookup fails
-      console.log('No restaurant profile found, using defaults');
+      logger.info('No restaurant profile found, using defaults', { userId: user._id });
     }
 
     // Build prompt with restaurant context
     const prompt = promptService.buildPrompt(review, restaurantProfile);
+
+    logger.logAI('AI reply generation started', { 
+      userId: user._id, 
+      model: requestedModel,
+      reviewLength: review.length
+    });
 
     // Get response from Ollama
     const rawReply = await ollamaService.generateReply(requestedModel, prompt);
@@ -79,6 +105,11 @@ const generateReply = async (req, res) => {
     // Get updated usage
     const updatedUsage = user.checkDailyLimit();
 
+    logger.logAI('AI reply generated successfully', { 
+      userId: user._id, 
+      remaining: updatedUsage.remaining
+    });
+
     // Return success response
     return res.status(200).json({
       success: true,
@@ -91,7 +122,7 @@ const generateReply = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Generate Reply Error:', error);
+    logger.error('Generate Reply Error', { error: error.message, stack: error.stack, userId: req.userId });
 
     return res.status(500).json({
       success: false,

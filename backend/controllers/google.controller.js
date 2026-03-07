@@ -1,7 +1,10 @@
 const axios = require('axios');
 const BusinessConnection = require('../models/BusinessConnection');
 const Review = require('../models/Review');
+const User = require('../models/User');
 const config = require('../config/config');
+const logger = require('../utils/logger');
+const { queueIntegrationConnectedEmail } = require('../queues/email.queue');
 
 /**
  * Initiate Google OAuth connection
@@ -38,7 +41,7 @@ const connect = (req, res) => {
     });
     
   } catch (error) {
-    console.error('Google Connect Error:', error);
+    logger.error('Google Connect Error', { error: error.message, stack: error.stack });
     return res.status(500).json({
       success: false,
       error: 'Failed to initiate Google connection'
@@ -120,6 +123,19 @@ const handleCallback = async (req, res) => {
     
     await connection.save();
     
+    logger.logReview('Google connection saved', { userId, locationName: locations[0].locationName });
+
+    // Queue integration connected email (async, doesn't block API)
+    const user = await User.findById(userId);
+    if (user) {
+      queueIntegrationConnectedEmail({
+        name: user.name,
+        email: user.email
+      }, 'google').catch(err => {
+        logger.error('Failed to queue integration connected email', { error: err.message, userId });
+      });
+    }
+    
     // Redirect to success page or return success
     return res.status(200).json({
       success: true,
@@ -128,7 +144,7 @@ const handleCallback = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Google Callback Error:', error);
+    logger.error('Google Callback Error', { error: error.message, stack: error.stack, userId });
     return res.status(500).json({
       success: false,
       error: 'Failed to complete Google connection'
@@ -151,7 +167,7 @@ const listConnections = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('List Connections Error:', error);
+    logger.error('List Connections Error', { error: error.message, userId: req.userId });
     return res.status(500).json({
       success: false,
       error: 'Failed to list connections'
@@ -186,7 +202,7 @@ const disconnect = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Disconnect Error:', error);
+    logger.error('Disconnect Error', { error: error.message, connectionId: req.params.connectionId, userId: req.userId });
     return res.status(500).json({
       success: false,
       error: 'Failed to disconnect'

@@ -1,5 +1,6 @@
 const { Queue } = require('bullmq');
 const config = require('../config/config');
+const logger = require('../utils/logger');
 
 // Create Redis connection options
 const connection = {
@@ -18,15 +19,27 @@ const replyQueue = new Queue('reply-generation', {
     },
     removeOnComplete: true,
     removeOnFail: false,
-    timeout: 60000 // 60 second timeout
+    timeout: 60000, // 60 second timeout
+    // IDEMPOTENCY: Remove job if it completes within 24 hours
+    removeOnComplete: {
+      count: 100,
+      age: 24 * 3600 // 24 hours
+    },
+    removeOnFail: {
+      count: 100
+    }
   }
 });
 
 /**
  * Add a reply generation job to the queue
+ * IDEMPOTENCY: Uses jobId based on platform + reviewId to prevent duplicate jobs
  */
 async function queueReplyGeneration(data) {
   const { reviewId, userId, platform, entityType, reviewText, rating } = data;
+
+  // IDEMPOTENCY KEY: Create unique job ID to prevent duplicate jobs
+  const jobId = `${platform || 'unknown'}-${reviewId || Date.now()}`;
 
   const job = await replyQueue.add('generateReply', {
     reviewId,
@@ -37,29 +50,43 @@ async function queueReplyGeneration(data) {
     rating,
     queuedAt: new Date().toISOString()
   }, {
+    jobId, // Use unique job ID for deduplication
     priority: rating <= 2 ? 1 : 2 // Higher priority for negative reviews
   });
 
-  console.log(`[ReplyQueue] Job added to queue: ${job.id}, reviewId: ${reviewId}`);
+  logger.logAI('Job added to queue', { 
+    jobId: job.id, 
+    reviewId, 
+    platform,
+    priority: rating <= 2 ? 'high' : 'normal'
+  });
   
   return job;
 }
 
 /**
  * Add bulk reply generation jobs
+ * IDEMPOTENCY: Uses unique job IDs to prevent duplicates
  */
 async function queueBulkReplyGeneration(jobs) {
-  const bulkJobs = jobs.map(data => ({
-    name: 'generateReply',
-    data: {
-      ...data,
-      queuedAt: new Date().toISOString()
-    },
-    priority: data.rating <= 2 ? 1 : 2
-  }));
+  const bulkJobs = jobs.map((data, index) => {
+    // Create unique job ID for deduplication
+    const jobId = `${data.platform || 'unknown'}-${data.reviewId || `${Date.now()}-${index}`}`;
+    
+    return {
+      name: 'generateReply',
+      data: {
+        ...data,
+        queuedAt: new Date().toISOString()
+      },
+      jobId, // Unique job ID prevents duplicates
+      priority: data.rating <= 2 ? 1 : 2
+    };
+  });
 
   const results = await replyQueue.addBulk(bulkJobs);
-  console.log(`[ReplyQueue] Bulk jobs added: ${results.length}`);
+  
+  logger.logAI('Bulk jobs added to queue', { count: results.length });
   
   return results;
 }
@@ -77,6 +104,7 @@ async function getQueueStats() {
  */
 async function cleanOldJobs() {
   await replyQueue.clean(1000 * 60 * 60 * 24, 100); // Clean jobs older than 24 hours
+  logger.info('Old jobs cleaned from queue');
 }
 
 module.exports = {

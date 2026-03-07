@@ -6,6 +6,7 @@ const User = require('../models/User');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const logger = require('../utils/logger');
 
 // Configure multer storage
 const storage = multer.diskStorage({
@@ -40,10 +41,11 @@ const getProfile = async (req, res) => {
       isActive: true 
     });
 
+    // Return name directly from user object (not derived from email)
     return res.status(200).json({
       success: true,
       profile: profile || null,
-      name: user ? user.email.split('@')[0] : '',
+      name: user ? user.name : '',
       email: user ? user.email : '',
       avatarUrl: user ? user.avatarUrl : null
     });

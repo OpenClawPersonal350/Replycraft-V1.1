@@ -36,17 +36,17 @@ module.exports = {
     },
     go: {
       name: 'Go',
-      dailyLimit: 50,
+      dailyLimit: 200,
       perMinute: 10
     },
     pro: {
       name: 'Pro',
-      dailyLimit: 500,
+      dailyLimit: 1000,
       perMinute: 30
     },
     ultra: {
       name: 'Ultra',
-      dailyLimit: 2000,
+      dailyLimit: 5000,
       perMinute: 100
     }
   },
