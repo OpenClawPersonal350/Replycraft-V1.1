@@ -1,21 +1,28 @@
 /**
  * Billing Routes
+ * Razorpay payment and subscription management
  */
 
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth.middleware');
 const {
-  createCheckoutSession,
-  createPortalSession,
+  getPlans,
+  createOrder,
+  verifyPayment,
   getSubscriptionStatus,
-  getPlans
+  cancelSubscription,
+  handleWebhook
 } = require('../controllers/billing.controller');
 
+// Webhook - no auth required
+router.post('/webhook', express.raw({ type: 'application/json' }), handleWebhook);
+
 // Protected routes - require authentication
-router.post('/create-checkout-session', authMiddleware, createCheckoutSession);
-router.post('/create-portal-session', authMiddleware, createPortalSession);
-router.get('/subscription', authMiddleware, getSubscriptionStatus);
 router.get('/plans', getPlans);
+router.post('/create-order', authMiddleware, createOrder);
+router.post('/verify-payment', authMiddleware, verifyPayment);
+router.get('/subscription', authMiddleware, getSubscriptionStatus);
+router.post('/cancel', authMiddleware, cancelSubscription);
 
 module.exports = router;

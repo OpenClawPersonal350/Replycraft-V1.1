@@ -1,22 +1,30 @@
+/**
+ * Review Routes
+ * Handles review inbox operations
+ */
+
 const express = require('express');
 const router = express.Router();
-const reviewController = require('../controllers/review.controller');
 const authMiddleware = require('../middleware/auth.middleware');
-const { customRateLimiter } = require('../middleware/rateLimit.middleware');
+const {
+  getReviews,
+  getReview,
+  approveReply,
+  updateReply,
+  sendReply,
+  generateReply,
+  rejectReply
+} = require('../controllers/review.controller');
 
-// Apply auth middleware to all routes
-router.use(authMiddleware);
+// All routes require authentication
+router.get('/', authMiddleware, getReviews);
+router.get('/:id', authMiddleware, getReview);
 
-// POST /api/reviews/process - Process review and generate reply
-router.post('/process', customRateLimiter, reviewController.processReview);
-
-// GET /api/reviews/pending - Get reviews awaiting approval
-router.get('/pending', reviewController.getPendingReviews);
-
-// POST /api/reviews/:id/approve - Approve and post reply
-router.post('/:id/approve', reviewController.approveReview);
-
-// POST /api/reviews/:id/reject - Reject review (no reply)
-router.post('/:id/reject', reviewController.rejectReview);
+// Actions
+router.post('/:id/generate', authMiddleware, generateReply);
+router.post('/:id/approve', authMiddleware, approveReply);
+router.put('/:id/edit', authMiddleware, updateReply);
+router.post('/:id/send', authMiddleware, sendReply);
+router.post('/:id/reject', authMiddleware, rejectReply);
 
 module.exports = router;

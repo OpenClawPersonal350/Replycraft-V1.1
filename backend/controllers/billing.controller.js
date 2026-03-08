@@ -1,47 +1,83 @@
 /**
  * Billing Controller
- * Handles Stripe checkout sessions and webhooks
+ * Handles Razorpay payments and subscriptions
  */
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const Razorpay = require('razorpay');
 const User = require('../models/User');
 const logger = require('../utils/logger');
 
-// Plan configuration
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'your_key_id',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'your_key_secret'
+});
+
+// Plan configuration (in paise - multiply by 100)
 const PLANS = {
   free: {
+    id: 'free',
     name: 'Free',
-    priceId: process.env.STRIPE_PRICE_FREE || 'price_free',
+    priceId: 'plan_free',
+    price: 0, // ₹0
     dailyLimit: 5,
     perMinute: 2
   },
   go: {
+    id: 'go',
     name: 'Go',
-    priceId: process.env.STRIPE_PRICE_GO || 'price_go',
-    dailyLimit: 50,
-    perMinute: 10,
-    price: 2900 // $29.00
+    priceId: process.env.RAZORPAY_PLAN_GO || 'plan_go',
+    price: 29900, // ₹299
+    dailyLimit: 200,
+    perMinute: 10
   },
   pro: {
+    id: 'pro',
     name: 'Pro',
-    priceId: process.env.STRIPE_PRICE_PRO || 'price_pro',
-    dailyLimit: 500,
-    perMinute: 30,
-    price: 7900 // $79.00
+    priceId: process.env.RAZORPAY_PLAN_PRO || 'plan_pro',
+    price: 79900, // ₹799
+    dailyLimit: 1000,
+    perMinute: 30
   },
   ultra: {
+    id: 'ultra',
     name: 'Ultra',
-    priceId: process.env.STRIPE_PRICE_ULTRA || 'price_ultra',
-    dailyLimit: 2000,
-    perMinute: 100,
-    price: 19900 // $199.00
+    priceId: process.env.RAZORPAY_PLAN_ULTRA || 'plan_ultra',
+    price: 199900, // ₹1999
+    dailyLimit: 5000,
+    perMinute: 100
   }
 };
 
 /**
- * Create Stripe checkout session for plan upgrade
+ * Get available plans
  */
-const createCheckoutSession = async (req, res) => {
+const getPlans = async (req, res) => {
+  try {
+    const plans = Object.entries(PLANS).map(([key, plan]) => ({
+      id: key,
+      name: plan.name,
+      price: plan.price / 100, // Convert to rupees
+      pricePaise: plan.price,
+      dailyLimit: plan.dailyLimit,
+      perMinute: plan.perMinute
+    }));
+
+    return res.status(200).json({
+      success: true,
+      plans
+    });
+
+  } catch (error) {
+    logger.error('Failed to get plans', { error: error.message });
+    return res.status(500).json({ success: false, error: 'Failed to get plans' });
+  }
+};
+
+/**
+ * Create Razorpay order for subscription
+ */
+const createOrder = async (req, res) => {
   try {
     const { plan: planType } = req.body;
     const user = req.user;
@@ -54,7 +90,9 @@ const createCheckoutSession = async (req, res) => {
       });
     }
 
-    // Free plan doesn't need checkout
+    const plan = PLANS[planType];
+
+    // Free plan doesn't need payment
     if (planType === 'free') {
       return res.status(400).json({
         success: false,
@@ -62,101 +100,138 @@ const createCheckoutSession = async (req, res) => {
       });
     }
 
-    const plan = PLANS[planType];
-
-    // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: plan.priceId,
-          quantity: 1
-        }
-      ],
-      mode: 'subscription',
-      success_url: `${process.env.FRONTEND_URL}/dashboard/billing?success=true&plan=${planType}`,
-      cancel_url: `${process.env.FRONTEND_URL}/dashboard/billing?canceled=true`,
-      customer_email: user.email,
-      metadata: {
+    // Create Razorpay order
+    const options = {
+      amount: plan.price, // Amount in paise
+      currency: 'INR',
+      receipt: `receipt_${user._id}_${Date.now()}`,
+      notes: {
         userId: user._id.toString(),
-        plan: planType
+        plan: planType,
+        email: user.email
       }
-    });
+    };
 
-    logger.logBilling('Checkout session created', {
+    const order = await razorpay.orders.create(options);
+
+    logger.logBilling('Razorpay order created', {
+      orderId: order.id,
       userId: user._id,
       plan: planType,
-      sessionId: session.id
+      amount: plan.price
     });
 
     return res.status(200).json({
       success: true,
-      checkoutUrl: session.url,
-      sessionId: session.id
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: process.env.RAZORPAY_KEY_ID,
+      plan: {
+        id: plan.id,
+        name: plan.name,
+        dailyLimit: plan.dailyLimit
+      }
     });
 
   } catch (error) {
-    logger.error('Failed to create checkout session', {
+    logger.error('Failed to create order', {
       error: error.message,
       userId: req.userId
     });
 
     return res.status(500).json({
       success: false,
-      error: 'Failed to create checkout session'
+      error: 'Failed to create payment order'
     });
   }
 };
 
 /**
- * Create billing portal session (for managing subscription)
+ * Verify payment and activate subscription
  */
-const createPortalSession = async (req, res) => {
+const verifyPayment = async (req, res) => {
   try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan: planType } = req.body;
     const user = req.user;
 
-    // Get or create Stripe customer
-    let customerId = user.stripeCustomerId;
-
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        metadata: {
-          userId: user._id.toString()
-        }
+    // Validate required fields
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        error: 'Payment verification failed: missing fields'
       });
-      customerId = customer.id;
-
-      // Save customer ID to user
-      user.stripeCustomerId = customerId;
-      await user.save();
     }
 
-    // Create portal session
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: `${process.env.FRONTEND_URL}/dashboard/billing`
-    });
+    // Validate plan
+    if (!planType || !PLANS[planType]) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid plan'
+      });
+    }
 
-    logger.logBilling('Portal session created', {
+    // Verify signature
+    const crypto = require('crypto');
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (generatedSignature !== razorpay_signature) {
+      logger.error('Payment signature verification failed', {
+        userId: user._id,
+        orderId: razorpay_order_id
+      });
+
+      return res.status(400).json({
+        success: false,
+        error: 'Payment verification failed: invalid signature'
+      });
+    }
+
+    // Payment verified - update user plan
+    const plan = PLANS[planType];
+    
+    user.plan = planType;
+    user.razorpayOrderId = razorpay_order_id;
+    user.razorpayPaymentId = razorpay_payment_id;
+    user.razorpaySubscriptionStatus = 'active';
+    user.subscriptionStatus = 'active';
+    user.subscriptionCurrentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    user.planExpiresAt = user.subscriptionCurrentPeriodEnd;
+    
+    await user.save();
+
+    logger.logBilling('Payment verified, plan activated', {
       userId: user._id,
-      customerId
+      plan: planType,
+      paymentId: razorpay_payment_id
     });
 
     return res.status(200).json({
       success: true,
-      portalUrl: session.url
+      message: 'Payment successful! Plan activated.',
+      plan: {
+        id: plan.id,
+        name: plan.name,
+        dailyLimit: plan.dailyLimit
+      },
+      subscription: {
+        status: 'active',
+        currentPeriodEnd: user.subscriptionCurrentPeriodEnd
+      }
     });
 
   } catch (error) {
-    logger.error('Failed to create portal session', {
+    logger.error('Payment verification error', {
       error: error.message,
       userId: req.userId
     });
 
     return res.status(500).json({
       success: false,
-      error: 'Failed to create portal session'
+      error: 'Payment verification failed'
     });
   }
 };
@@ -167,13 +242,18 @@ const createPortalSession = async (req, res) => {
 const getSubscriptionStatus = async (req, res) => {
   try {
     const user = req.user;
-
-    // Get subscription info using the method from User model
-    const subscriptionInfo = user.getSubscriptionInfo();
+    const plan = PLANS[user.plan] || PLANS.free;
 
     return res.status(200).json({
       success: true,
-      ...subscriptionInfo
+      plan: user.plan,
+      status: user.razorpaySubscriptionStatus || (user.plan === 'free' ? 'active' : 'inactive'),
+      currentPeriodEnd: user.subscriptionCurrentPeriodEnd 
+        ? Math.floor(user.subscriptionCurrentPeriodEnd.getTime() / 1000) 
+        : null,
+      dailyLimit: plan.dailyLimit,
+      perMinute: plan.perMinute,
+      razorpayPaymentId: user.razorpayPaymentId || null
     });
 
   } catch (error) {
@@ -190,33 +270,126 @@ const getSubscriptionStatus = async (req, res) => {
 };
 
 /**
- * Get available plans
+ * Cancel subscription (downgrade to free)
  */
-const getPlans = async (req, res) => {
+const cancelSubscription = async (req, res) => {
   try {
-    const plans = Object.entries(PLANS).map(([key, plan]) => ({
-      id: key,
-      name: plan.name,
-      dailyLimit: plan.dailyLimit,
-      perMinute: plan.perMinute,
-      price: plan.price ? plan.price / 100 : 0
-    }));
+    const user = req.user;
+
+    if (user.plan === 'free') {
+      return res.status(400).json({
+        success: false,
+        error: 'No active subscription to cancel'
+      });
+    }
+
+    // Downgrade to free
+    user.plan = 'free';
+    user.razorpaySubscriptionStatus = 'canceled';
+    user.subscriptionStatus = 'canceled';
+    user.razorpayOrderId = null;
+    user.razorpayPaymentId = null;
+    user.subscriptionCurrentPeriodEnd = null;
+    user.planExpiresAt = null;
+    
+    await user.save();
+
+    logger.logBilling('Subscription canceled', { userId: user._id });
 
     return res.status(200).json({
       success: true,
-      plans
+      message: 'Subscription canceled. You are now on the Free plan.',
+      plan: 'free'
     });
 
   } catch (error) {
-    logger.error('Failed to get plans', { error: error.message });
-    return res.status(500).json({ success: false, error: 'Failed to get plans' });
+    logger.error('Cancel subscription error', {
+      error: error.message,
+      userId: req.userId
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to cancel subscription'
+    });
+  }
+};
+
+/**
+ * Create Razorpay webhook handler
+ */
+const handleWebhook = async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const signature = req.headers['x-razorpay-signature'];
+
+    // Verify webhook signature
+    const generatedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(JSON.stringify(req.body))
+      .digest('hex');
+
+    if (signature !== generatedSignature) {
+      logger.error('Razorpay webhook signature verification failed');
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+
+    const event = req.body;
+    const { event: eventType } = event;
+
+    logger.info('Razorpay webhook received', { eventType });
+
+    switch (eventType) {
+      case 'payment.captured':
+        // Payment successful - already handled in verifyPayment
+        break;
+        
+      case 'payment.failed':
+        // Handle failed payment
+        logger.warn('Payment failed', { 
+          paymentId: event.payment?.entity?.id 
+        });
+        break;
+        
+      case 'subscription.activated':
+        logger.info('Subscription activated', {
+          subscriptionId: event.subscription?.entity?.id
+        });
+        break;
+        
+      case 'subscription.cancelled':
+        // Handle subscription cancellation
+        const subscriptionId = event.subscription?.entity?.id;
+        if (subscriptionId) {
+          await User.updateOne(
+            { razorpayOrderId: subscriptionId },
+            { 
+              plan: 'free',
+              razorpaySubscriptionStatus: 'canceled',
+              subscriptionStatus: 'canceled'
+            }
+          );
+        }
+        break;
+        
+      default:
+        logger.info('Unhandled Razorpay event', { eventType });
+    }
+
+    return res.status(200).json({ received: true });
+
+  } catch (error) {
+    logger.error('Webhook error', { error: error.message });
+    return res.status(500).json({ error: 'Webhook processing failed' });
   }
 };
 
 module.exports = {
-  createCheckoutSession,
-  createPortalSession,
-  getSubscriptionStatus,
   getPlans,
+  createOrder,
+  verifyPayment,
+  getSubscriptionStatus,
+  cancelSubscription,
+  handleWebhook,
   PLANS
 };

@@ -10,6 +10,8 @@ const googleRoutes = require('./routes/google.routes');
 const profileRoutes = require('./routes/profile.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const billingRoutes = require('./routes/billing.routes');
+const aiConfigRoutes = require('./routes/aiConfig.routes');
+const integrationRoutes = require('./routes/integration.routes');
 const path = require('path');
 const fs = require('fs');
 const logger = require('./utils/logger');
@@ -34,6 +36,7 @@ require('./cron/queueMetrics');
 require('./workers/reviewFetcher');
 require('./workers/aiWorker');
 require('./workers/emailWorker');
+require('./workers/googleReviewFetcher');
 
 // Validate email configuration at startup
 validateEmailConfig();
@@ -82,6 +85,8 @@ app.use('/api/google', googleRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/ai-config', aiConfigRoutes);
+app.use('/api/integrations', integrationRoutes);
 
 // Health check endpoints
 app.get('/health', (req, res) => {

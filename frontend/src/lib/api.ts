@@ -122,21 +122,38 @@ class ApiService {
   }
 
   // Review endpoints
-  async getPendingReviews(params?: any) {
+  async getReviews(params?: {
+    platform?: string;
+    status?: string;
+    sentiment?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }) {
     try {
-      const response = await apiClient.get('/reviews/pending', { params });
+      const response = await apiClient.get('/reviews', { params });
       return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch pending reviews');
+      throw new Error(error.response?.data?.message || 'Failed to fetch reviews');
     }
   }
 
-  async processReview(reviewId: string) {
+  async getReview(id: string) {
     try {
-      const response = await apiClient.post('/reviews/process', { reviewId });
+      const response = await apiClient.get(`/reviews/${id}`);
       return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to process review');
+      throw new Error(error.response?.data?.message || 'Failed to fetch review');
+    }
+  }
+
+  async generateReviewReply(reviewId: string) {
+    try {
+      const response = await apiClient.post(`/reviews/${reviewId}/generate`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to generate reply');
     }
   }
 
@@ -146,6 +163,24 @@ class ApiService {
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to approve review');
+    }
+  }
+
+  async updateReviewReply(reviewId: string, replyText: string) {
+    try {
+      const response = await apiClient.put(`/reviews/${reviewId}/edit`, { replyText });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update reply');
+    }
+  }
+
+  async sendReviewReply(reviewId: string) {
+    try {
+      const response = await apiClient.post(`/reviews/${reviewId}/send`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to send reply');
     }
   }
 
@@ -235,6 +270,37 @@ class ApiService {
     }
   }
 
+  // Integrations
+  async getIntegrations() {
+    try {
+      const response = await apiClient.get('/integrations');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch integrations');
+    }
+  }
+
+  async connectGoogle(code: string, redirectUri?: string) {
+    try {
+      const response = await apiClient.post('/integrations/google/connect', {
+        code,
+        redirectUri
+      });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to connect Google');
+    }
+  }
+
+  async disconnectIntegration(id: string) {
+    try {
+      const response = await apiClient.delete(`/integrations/${id}`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to disconnect');
+    }
+  }
+
   // Billing / Subscription
   async getSubscription() {
     try {
@@ -247,10 +313,95 @@ class ApiService {
 
   async createCheckoutSession(plan: string) {
     try {
-      const response = await apiClient.post('/billing/create-checkout-session', { plan });
+      const response = await apiClient.post('/billing/create-order', { plan });
       return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to create checkout session');
+      throw new Error(error.response?.data?.message || 'Failed to create payment order');
+    }
+  }
+
+  async verifyPayment(razorpay_order_id: string, razorpay_payment_id: string, razorpay_signature: string, plan: string) {
+    try {
+      const response = await apiClient.post('/billing/verify-payment', {
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature,
+        plan
+      });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to verify payment');
+    }
+  }
+
+  async cancelSubscription() {
+    try {
+      const response = await apiClient.post('/billing/cancel');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to cancel subscription');
+    }
+  }
+
+  // AI Configuration methods
+  async getAIConfigurations() {
+    try {
+      const response = await apiClient.get('/ai-config');
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to fetch configurations');
+    }
+  }
+
+  async createAIConfiguration(config: {
+    configName: string;
+    businessName?: string;
+    brandTone?: string;
+    emojiAllowed?: boolean;
+    replyMode?: string;
+    replyDelayMinutes?: number;
+    isDefault?: boolean;
+  }) {
+    try {
+      const response = await apiClient.post('/ai-config', config);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to create configuration');
+    }
+  }
+
+  async updateAIConfiguration(id: string, config: {
+    configName?: string;
+    businessName?: string;
+    brandTone?: string;
+    emojiAllowed?: boolean;
+    replyMode?: string;
+    replyDelayMinutes?: number;
+    isDefault?: boolean;
+  }) {
+    try {
+      const response = await apiClient.put(`/ai-config/${id}`, config);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update configuration');
+    }
+  }
+
+  async deleteAIConfiguration(id: string) {
+    try {
+      const response = await apiClient.delete(`/ai-config/${id}`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to delete configuration');
+    }
+  }
+
+  async setDefaultAIConfiguration(id: string) {
+    try {
+      const response = await apiClient.post(`/ai-config/${id}/set-default`);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to set default configuration');
     }
   }
 

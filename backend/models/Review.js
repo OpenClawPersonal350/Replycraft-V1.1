@@ -41,39 +41,60 @@ const reviewSchema = new mongoose.Schema({
     min: 1,
     max: 5
   },
+  // Sentiment analysis result
+  sentiment: {
+    type: String,
+    enum: ['positive', 'neutral', 'negative', 'unknown'],
+    default: 'unknown'
+  },
   author: {
     type: String
   },
   authorPhotoUrl: {
     type: String
   },
-  replyText: {
-    type: String
-  },
-  status: {
+  // AI-generated reply text
+  aiReply: {
     type: String,
-    enum: ['pending', 'pending_approval', 'processed', 'ignored', 'rejected', 'failed'],
+    default: null
+  },
+  // Reply status for the inbox
+  replyStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'posted', 'rejected', 'failed'],
     default: 'pending'
   },
+  // Original reply text (if edited by user)
+  replyText: {
+    type: String,
+    default: null
+  },
   replyPostedAt: {
-    type: Date
+    type: Date,
+    default: null
   },
   fetchedAt: {
     type: Date,
     default: Date.now
+  },
+  // Legacy status field (kept for backward compatibility)
+  status: {
+    type: String,
+    enum: ['pending', 'pending_approval', 'processed', 'ignored', 'rejected', 'failed'],
+    default: 'pending'
   }
 }, {
   timestamps: true
 });
 
 // Compound indexes for efficient queries
-reviewSchema.index({ userId: 1, status: 1 });
-reviewSchema.index({ connectionId: 1, createdAt: -1 });
+reviewSchema.index({ userId: 1, replyStatus: 1 });
+reviewSchema.index({ userId: 1, platform: 1 });
 reviewSchema.index({ userId: 1, createdAt: -1 });
+reviewSchema.index({ connectionId: 1, createdAt: -1 });
 reviewSchema.index({ reviewId: 1, platform: 1 }, { unique: true });
 
 // IDEMPOTENCY: Compound unique index on platform + externalReviewId
-// This prevents duplicate reviews from being stored
 reviewSchema.index({ platform: 1, externalReviewId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Review', reviewSchema);

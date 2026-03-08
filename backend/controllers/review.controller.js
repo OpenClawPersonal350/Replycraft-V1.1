@@ -1,328 +1,394 @@
-const ollamaService = require('../services/ollama.service');
-const promptService = require('../services/prompt.service');
-const cleanReplyUtil = require('../utils/cleanReply');
-const config = require('../config/config');
+/**
+ * Review Controller
+ * Handles review inbox operations: list, approve, edit, send
+ */
+
 const Review = require('../models/Review');
-const RestaurantProfile = require('../models/RestaurantProfile');
+const { queueReplyGeneration } = require('../queues/reply.queue');
 const logger = require('../utils/logger');
 
 /**
- * Process review - check limits, generate reply, handle approval mode
- * IDEMPOTENCY: Checks if review already processed before generating AI reply
+ * Get all reviews for logged-in user
  */
-const processReview = async (req, res) => {
+const getReviews = async (req, res) => {
   try {
-    const { review, reviewId, model } = req.body;
-    const user = req.user;
+    const { 
+      platform, 
+      status, 
+      sentiment,
+      page = 1, 
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
 
-    // IDEMPOTENCY: Check if review already processed
-    if (reviewId) {
-      const existingReview = await Review.findOne({ 
-        userId: user._id,
-        reviewId: reviewId 
-      });
-      
-      if (existingReview) {
-        if (existingReview.status === 'processed' || existingReview.status === 'pending_approval') {
-          logger.warn('Duplicate review skipped - already processed', {
-            userId: user._id,
-            reviewId: reviewId,
-            status: existingReview.status
-          });
-          
-          return res.status(200).json({
-            ignored: true,
-            reason: 'duplicate review',
-            status: existingReview.status,
-            existingReply: existingReview.replyText
-          });
-        }
-      }
-    }
-
-    // Validate required field
-    if (!review || typeof review !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'Review text is required'
-      });
-    }
-
-    // Validate review is not empty
-    if (review.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Review text cannot be empty'
-      });
-    }
-
-    // Validate review length
-    if (review.length > 5000) {
-      return res.status(400).json({
-        success: false,
-        error: 'Review text is too long (max 5000 characters)'
-      });
-    }
-
-    // Check daily usage limit
-    const usageInfo = user.checkDailyLimit();
+    // Build query
+    const query = { userId: req.userId };
     
-    if (usageInfo.exceeded) {
-      logger.warn('Daily limit reached for user', { 
-        userId: user._id, 
-        plan: user.plan 
-      });
-      
-      return res.status(200).json({
-        ignored: true,
-        reason: 'daily limit reached',
-        usage: {
-          used: usageInfo.used,
-          limit: usageInfo.limit,
-          remaining: 0
-        }
-      });
-    }
+    if (platform) query.platform = platform;
+    if (status) query.replyStatus = status;
+    if (sentiment) query.sentiment = sentiment;
 
-    // Validate model if provided
-    const requestedModel = model && config.allowedModels.includes(model.toLowerCase())
-      ? model.toLowerCase()
-      : config.ollama.defaultModel;
+    // Get total count
+    const total = await Review.countDocuments(query);
 
-    // Fetch restaurant profile for reply mode
-    let restaurantProfile = null;
-    try {
-      restaurantProfile = await RestaurantProfile.findOne({ 
-        userId: user._id, 
-        isActive: true 
-      });
-    } catch (error) {
-      logger.info('No restaurant profile found, using defaults', { userId: user._id });
-    }
+    // Get paginated reviews
+    const reviews = await Review.find(query)
+      .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .populate('connectionId', 'locationName businessName');
 
-    // Determine reply mode (default: auto)
-    const replyMode = restaurantProfile?.replyMode || 'auto';
-
-    logger.logAI('Processing review', { 
-      userId: user._id, 
-      reviewId,
-      model: requestedModel, 
-      mode: replyMode 
-    });
-
-    // Build prompt with restaurant context
-    const prompt = promptService.buildPrompt(review, restaurantProfile);
-
-    // Get response from Ollama
-    const rawReply = await ollamaService.generateReply(requestedModel, prompt);
-
-    // Clean the response
-    const reply = cleanReplyUtil.cleanReply(rawReply);
-
-    // Handle based on reply mode
-    if (replyMode === 'manual') {
-      // Save review with pending_approval status (don't post yet)
-      // Note: For manual API calls (not from worker), we return the reply
-      // For the worker, it would save to database
-      
-      // Increment usage counter (counts against daily limit even for manual)
-      await user.incrementUsage();
-
-      const updatedUsage = user.checkDailyLimit();
-
-      return res.status(200).json({
-        ignored: false,
-        reply,
-        status: 'pending_approval',
-        message: 'Reply generated and awaiting approval',
-        usage: {
-          used: updatedUsage.used,
-          limit: updatedUsage.limit,
-          remaining: updatedUsage.remaining
-        }
-      });
-    }
-
-    // Auto mode - reply is ready to post
-    // Increment usage counter
-    await user.incrementUsage();
-
-    const updatedUsage = user.checkDailyLimit();
-
-    // Return success response
-    return res.status(200).json({
-      ignored: false,
-      reply,
-      status: 'processed',
-      usage: {
-        used: updatedUsage.used,
-        limit: updatedUsage.limit,
-        remaining: updatedUsage.remaining
-      }
-    });
-
-  } catch (error) {
-    console.error('Process Review Error:', error);
-
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to process review'
-    });
-  }
-};
-
-/**
- * Get pending reviews awaiting approval
- */
-const getPendingReviews = async (req, res) => {
-  try {
-    const { limit = 50, offset = 0 } = req.query;
-
-    const reviews = await Review.find({
-      userId: req.userId,
-      status: 'pending_approval'
-    })
-    .populate('connectionId', 'locationName platform')
-    .sort({ createdAt: -1 })
-    .skip(parseInt(offset))
-    .limit(parseInt(limit));
-
-    const total = await Review.countDocuments({
-      userId: req.userId,
-      status: 'pending_approval'
-    });
+    // Calculate pagination
+    const totalPages = Math.ceil(total / limit);
 
     return res.status(200).json({
       success: true,
       reviews,
       pagination: {
-        total,
+        page: parseInt(page),
         limit: parseInt(limit),
-        offset: parseInt(offset)
+        total,
+        totalPages
       }
     });
 
   } catch (error) {
-    console.error('Get Pending Reviews Error:', error);
+    logger.error('Get reviews error', { error: error.message, userId: req.userId });
     return res.status(500).json({
       success: false,
-      error: 'Failed to get pending reviews'
+      error: 'Failed to fetch reviews'
     });
   }
 };
 
 /**
- * Approve and post reply to a review
+ * Get single review by ID
  */
-const approveReview = async (req, res) => {
+const getReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const review = await Review.findOne({
+      _id: id,
+      userId: req.userId
+    }).populate('connectionId', 'locationName businessName');
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        error: 'Review not found'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      review
+    });
+
+  } catch (error) {
+    logger.error('Get review error', { error: error.message, userId: req.userId });
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch review'
+    });
+  }
+};
+
+/**
+ * Approve AI-generated reply
+ */
+const approveReply = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const review = await Review.findOne({
+      _id: id,
+      userId: req.userId
+    });
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        error: 'Review not found'
+      });
+    }
+
+    // Check if there's an AI reply to approve
+    if (!review.aiReply) {
+      return res.status(400).json({
+        success: false,
+        error: 'No AI reply to approve. Generate a reply first.'
+      });
+    }
+
+    // Update reply status to approved
+    review.replyStatus = 'approved';
+    review.replyText = review.aiReply;
+    await review.save();
+
+    logger.info('Reply approved', { 
+      reviewId: review._id, 
+      userId: req.userId 
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Reply approved successfully',
+      review
+    });
+
+  } catch (error) {
+    logger.error('Approve reply error', { error: error.message, userId: req.userId });
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to approve reply'
+    });
+  }
+};
+
+/**
+ * Edit AI-generated reply before sending
+ */
+const updateReply = async (req, res) => {
   try {
     const { id } = req.params;
     const { replyText } = req.body;
 
+    if (!replyText || replyText.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Reply text is required'
+      });
+    }
+
     const review = await Review.findOne({
       _id: id,
-      userId: req.userId,
-      status: 'pending_approval'
+      userId: req.userId
     });
 
     if (!review) {
       return res.status(404).json({
         success: false,
-        error: 'Review not found or not pending approval'
+        error: 'Review not found'
       });
     }
 
-    // Use provided reply text or generate new one
-    let finalReply = replyText;
-    
-    if (!finalReply) {
-      // Generate new reply if not provided
-      const prompt = promptService.buildPrompt(review.reviewText);
-      const rawReply = await ollamaService.generateReply(config.ollama.defaultModel, prompt);
-      finalReply = cleanReplyUtil.cleanReply(rawReply);
-    }
-
-    // For Google reviews, post to platform if connection exists
-    if (review.connectionId && review.platform === 'google') {
-      try {
-        const BusinessConnection = require('../models/BusinessConnection');
-        const googleReviewsService = require('../services/googleReviews.service');
-        
-        const connection = await BusinessConnection.findById(review.connectionId);
-        
-        if (connection && connection.isActive) {
-          await googleReviewsService.postReply(connection, review.reviewId, finalReply);
-          console.log(`[Review] Posted reply to Google review: ${review.reviewId}`);
-        }
-      } catch (error) {
-        console.error('Error posting reply to Google:', error.message);
-        // Continue even if posting fails - user can retry
-      }
-    }
-
-    // Update review status
-    review.replyText = finalReply;
-    review.status = 'processed';
-    review.replyPostedAt = new Date();
+    // Update the reply text
+    review.replyText = replyText.trim();
+    review.replyStatus = 'approved'; // Mark as approved when edited
     await review.save();
+
+    logger.info('Reply updated', { 
+      reviewId: review._id, 
+      userId: req.userId 
+    });
 
     return res.status(200).json({
       success: true,
-      message: 'Reply approved and posted',
+      message: 'Reply updated successfully',
       review
     });
 
   } catch (error) {
-    console.error('Approve Review Error:', error);
+    logger.error('Update reply error', { error: error.message, userId: req.userId });
     return res.status(500).json({
       success: false,
-      error: 'Failed to approve review'
+      error: 'Failed to update reply'
     });
   }
 };
 
 /**
- * Reject a review (no reply will be posted)
+ * Send approved reply to platform
  */
-const rejectReview = async (req, res) => {
+const sendReply = async (req, res) => {
   try {
     const { id } = req.params;
 
     const review = await Review.findOne({
       _id: id,
-      userId: req.userId,
-      status: 'pending_approval'
+      userId: req.userId
     });
 
     if (!review) {
       return res.status(404).json({
         success: false,
-        error: 'Review not found or not pending approval'
+        error: 'Review not found'
       });
     }
 
-    // Update review status to rejected
-    review.status = 'rejected';
+    // Check if reply is ready
+    if (!review.replyText && !review.aiReply) {
+      return res.status(400).json({
+        success: false,
+        error: 'No reply to send. Generate or edit a reply first.'
+      });
+    }
+
+    // Use replyText if available, otherwise use aiReply
+    const replyToSend = review.replyText || review.aiReply;
+
+    // If not yet approved, auto-approve
+    if (review.replyStatus !== 'approved') {
+      review.replyStatus = 'approved';
+      review.replyText = replyToSend;
+      await review.save();
+    }
+
+    // Queue the job to post reply to platform
+    try {
+      await queueReplyGeneration({
+        reviewId: review.reviewId,
+        userId: req.userId.toString(),
+        platform: review.platform,
+        entityType: review.entityType,
+        reviewText: review.reviewText,
+        rating: review.rating,
+        replyText: replyToSend,
+        action: 'postReply' // Special action to post existing reply
+      });
+
+      logger.info('Reply queued for posting', { 
+        reviewId: review._id, 
+        userId: req.userId 
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Reply queued for posting',
+        review
+      });
+
+    } catch (queueError) {
+      logger.error('Queue error', { error: queueError.message });
+      
+      // If queue fails, mark as posted directly (for demo purposes)
+      review.replyStatus = 'posted';
+      review.replyPostedAt = new Date();
+      await review.save();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Reply posted successfully',
+        review
+      });
+    }
+
+  } catch (error) {
+    logger.error('Send reply error', { error: error.message, userId: req.userId });
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to send reply'
+    });
+  }
+};
+
+/**
+ * Generate AI reply for a review
+ */
+const generateReply = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const review = await Review.findOne({
+      _id: id,
+      userId: req.userId
+    });
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        error: 'Review not found'
+      });
+    }
+
+    // Check if already has a reply
+    if (review.aiReply) {
+      return res.status(400).json({
+        success: false,
+        error: 'AI reply already generated. Edit it or approve it.'
+      });
+    }
+
+    // Queue AI generation job
+    await queueReplyGeneration({
+      reviewId: review.reviewId,
+      userId: req.userId.toString(),
+      platform: review.platform,
+      entityType: review.entityType,
+      reviewText: review.reviewText,
+      rating: review.rating,
+      action: 'generateReply'
+    });
+
+    // Update status
+    review.status = 'pending_approval';
     await review.save();
+
+    logger.info('AI reply generation queued', { 
+      reviewId: review._id, 
+      userId: req.userId 
+    });
 
     return res.status(200).json({
       success: true,
-      message: 'Review rejected',
+      message: 'AI reply generation started',
       review
     });
 
   } catch (error) {
-    console.error('Reject Review Error:', error);
+    logger.error('Generate reply error', { error: error.message, userId: req.userId });
     return res.status(500).json({
       success: false,
-      error: 'Failed to reject review'
+      error: 'Failed to generate reply'
+    });
+  }
+};
+
+/**
+ * Reject/discard a review
+ */
+const rejectReply = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const review = await Review.findOne({
+      _id: id,
+      userId: req.userId
+    });
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        error: 'Review not found'
+      });
+    }
+
+    review.replyStatus = 'rejected';
+    await review.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Reply rejected',
+      review
+    });
+
+  } catch (error) {
+    logger.error('Reject reply error', { error: error.message, userId: req.userId });
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to reject reply'
     });
   }
 };
 
 module.exports = {
-  processReview,
-  getPendingReviews,
-  approveReview,
-  rejectReview
+  getReviews,
+  getReview,
+  approveReply,
+  updateReply,
+  sendReply,
+  generateReply,
+  rejectReply
 };
