@@ -49,6 +49,9 @@ validateEmailConfig();
 
 const app = express();
 
+// Suppress Mongoose duplicate index warning
+mongoose.set('suppressNoSchemaWarning', true);
+
 // Security middleware
 app.use(helmet());
 
@@ -99,7 +102,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/contact', contactRoutes);
 
 // Bull Board - Queue Monitoring UI (only in development)
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' && bullBoardRouter) {
   app.use('/admin/queues', bullBoardRouter);
 }
 
