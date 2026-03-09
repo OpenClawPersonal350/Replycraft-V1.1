@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { Navbar } from "@/components/landing/Navbar";
@@ -6,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useSendContact } from "@/api/hooks";
 
 const contactMethods = [
   {
@@ -30,15 +32,38 @@ const contactMethods = [
 
 const Contact = () => {
   const { toast } = useToast();
+  const sendContactMutation = useSendContact();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormEvent>) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    
     const form = e.currentTarget;
-    form.reset();
-    toast({
-      title: "Message sent successfully!",
-      description: "We'll contact you shortly. Usually it takes 24–48 hours.",
-    });
+    const formData = new FormData(form);
+    
+    try {
+      await sendContactMutation.mutateAsync({
+        name: formData.get('firstName') + ' ' + formData.get('lastName'),
+        email: formData.get('email') as string,
+        company: formData.get('company') as string,
+        message: formData.get('message') as string,
+      });
+      
+      form.reset();
+      toast({
+        title: "Message sent successfully!",
+        description: "We'll contact you shortly. Usually it takes 24–48 hours.",
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to send message",
+        description: "Please try again later or email us directly.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -53,7 +78,7 @@ const Contact = () => {
           >
             <h1 className="text-4xl font-bold text-foreground mb-4">Contact</h1>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Tell us what you need and we’ll help you get the most out of ReplyCraft.
+              Tell us what you need and we'll help you get the most out of ReplyCraft.
             </p>
           </motion.div>
 
@@ -92,19 +117,21 @@ const Contact = () => {
               <h2 className="text-lg font-semibold text-foreground mb-4">Send a message</h2>
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <Input placeholder="First name" aria-label="First name" className="bg-muted/20 border-border" />
-                  <Input placeholder="Last name" aria-label="Last name" className="bg-muted/20 border-border" />
+                  <Input name="firstName" placeholder="First name" aria-label="First name" className="bg-muted/20 border-border" required />
+                  <Input name="lastName" placeholder="Last name" aria-label="Last name" className="bg-muted/20 border-border" required />
                 </div>
-                <Input placeholder="Work email" type="email" aria-label="Work email" className="bg-muted/20 border-border" />
-                <Input placeholder="Company" aria-label="Company" className="bg-muted/20 border-border" />
+                <Input name="email" placeholder="Work email" type="email" aria-label="Work email" className="bg-muted/20 border-border" required />
+                <Input name="company" placeholder="Company" aria-label="Company" className="bg-muted/20 border-border" />
                 <Textarea
+                  name="message"
                   placeholder="How can we help?"
                   aria-label="How can we help"
                   rows={6}
                   className="bg-muted/20 border-border resize-none"
+                  required
                 />
-                <Button type="submit" className="w-full gradient-primary text-primary-foreground btn-glow">
-                  Send message
+                <Button type="submit" disabled={isSubmitting} className="w-full gradient-primary text-primary-foreground btn-glow">
+                  {isSubmitting ? "Sending..." : "Send message"}
                 </Button>
               </form>
             </motion.section>

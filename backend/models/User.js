@@ -17,6 +17,12 @@ const userSchema = new mongoose.Schema({
     trim: true,
     match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email']
   },
+  // Firebase UID for Firebase-authenticated users
+  firebaseUid: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
   password: {
     type: String,
     required: [true, 'Password is required'],

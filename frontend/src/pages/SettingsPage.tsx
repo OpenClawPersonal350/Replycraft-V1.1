@@ -15,14 +15,16 @@ import ImageCropper from "@/components/ImageCropper";
 import { countries, type Country } from "@/data/countries";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
-import { useUpdateProfile, useUploadAvatar, useSettings, useUpdateSettings, useUpdateNotifications, useChangePassword } from "@/api/hooks";
+import { useUpdateProfile, useUploadAvatar, useSettings, useUpdateSettings, useUpdateNotifications, useChangePassword, useProfile } from "@/api/hooks";
 
 const SettingsPage = () => {
   const { user, setAvatarUrl } = useUser();
-  const [fullName, setFullName] = useState(user.fullName);
-  const [phone, setPhone] = useState("9876543210");
-  const [address, setAddress] = useState("123 Main Street");
-  const [city, setCity] = useState("Mumbai");
+  const { data: profile } = useProfile();
+  const { data: settings } = useSettings();
+  const [fullName, setFullName] = useState(profile?.fullName || user.fullName || "");
+  const [phone, setPhone] = useState(profile?.phoneNumber || "");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
   const [dob, setDob] = useState<Date | undefined>();
   const [dobOpen, setDobOpen] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]);
@@ -30,6 +32,24 @@ const SettingsPage = () => {
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const updateProfileMutation = useUpdateProfile();
+  const uploadAvatarMutation = useUploadAvatar();
+  const updateSettingsMutation = useUpdateSettings();
+  const updateNotificationsMutation = useUpdateNotifications();
+  const changePasswordMutation = useChangePassword();
+
+  // Load profile data when available
+  useMemo(() => {
+    if (profile) {
+      setFullName(profile.fullName || user.fullName || "");
+      setPhone(profile.phoneNumber || "");
+    }
+    if (settings) {
+      setBrandTone(settings.brandTone || "professional");
+      setUseEmojis(settings.useEmojis || false);
+      setReplyMode(settings.replyMode === "auto" ? "auto" : "approval");
+    }
+  }, [profile, settings]);
 
   // AI Settings state
   const [brandTone, setBrandTone] = useState("professional");
@@ -83,9 +103,10 @@ const SettingsPage = () => {
     const formData = new FormData();
     formData.append("avatar", blob, "avatar.jpg");
     try {
-      // TODO: Uncomment when backend connected
-      // await uploadAvatarMutation.mutateAsync(formData);
-    } catch { /* handled by mutation */ }
+      await uploadAvatarMutation.mutateAsync(formData);
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+    }
   };
 
   const handlePhoneChange = (value: string) => {
@@ -97,11 +118,10 @@ const SettingsPage = () => {
 
   const handleSaveProfile = async () => {
     try {
-      // TODO: Uncomment when backend connected
-      // await updateProfileMutation.mutateAsync({
-      //   fullName, phone, countryCode: selectedCountry.code,
-      //   address, city, dateOfBirth: dob?.toISOString(),
-      // });
+      await updateProfileMutation.mutateAsync({
+        name: fullName,
+        phoneNumber: phone,
+      });
       toast({ title: "Profile saved", description: "Your profile has been updated." });
     } catch (err: any) {
       toast({ title: "Error", description: err?.message || "Failed to save profile.", variant: "destructive" });
@@ -110,8 +130,12 @@ const SettingsPage = () => {
 
   const handleSaveAI = async () => {
     try {
-      // TODO: Uncomment when backend connected
-      // await updateSettingsMutation.mutateAsync({ brandTone, replyLanguage, useEmojis, replyMode, replyDelay });
+      await updateSettingsMutation.mutateAsync({ 
+        brandTone, 
+        replyLanguage, 
+        useEmojis, 
+        replyMode: replyMode === "auto" ? "auto" : "manual",
+      });
       toast({ title: "AI settings saved", description: "Reply preferences updated." });
     } catch (err: any) {
       toast({ title: "Error", description: err?.message || "Failed to save settings.", variant: "destructive" });
@@ -120,8 +144,7 @@ const SettingsPage = () => {
 
   const handleSaveNotifications = async () => {
     try {
-      // TODO: Uncomment when backend connected
-      // await updateNotificationsMutation.mutateAsync({ emailNotifications, negativeAlerts });
+      await updateNotificationsMutation.mutateAsync({ emailNotifications, negativeAlerts });
       toast({ title: "Notification settings saved" });
     } catch (err: any) {
       toast({ title: "Error", description: err?.message || "Failed to save.", variant: "destructive" });
@@ -138,8 +161,7 @@ const SettingsPage = () => {
       return;
     }
     try {
-      // TODO: Uncomment when backend connected
-      // await changePasswordMutation.mutateAsync({ currentPassword, newPassword });
+      await changePasswordMutation.mutateAsync({ currentPassword, newPassword });
       toast({ title: "Password updated", description: "Your password has been changed successfully." });
       setCurrentPassword("");
       setNewPassword("");

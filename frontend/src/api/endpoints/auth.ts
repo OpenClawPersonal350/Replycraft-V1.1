@@ -1,13 +1,19 @@
 // ==========================================
-// Auth Endpoints
+// Auth Endpoints - Firebase Authentication
 // ==========================================
 import { apiClient } from "../client";
-import type { LoginRequest, SignupRequest, AuthResponse, User, PasswordResetRequest, OtpVerifyRequest, OtpResendRequest } from "../types";
+import type { LoginRequest, SignupRequest, AuthResponse, User, PasswordResetRequest } from "../types";
 
 export const authApi = {
+  // Firebase login - exchanges Firebase ID token for backend JWT
+  firebaseLogin: (data: { idToken: string; email?: string; name?: string }) =>
+    apiClient<AuthResponse>("/auth/firebase-login", { method: "POST", body: data }),
+
+  // Legacy login (fallback for non-Firebase)
   login: (data: LoginRequest) =>
     apiClient<AuthResponse>("/auth/login", { method: "POST", body: data }),
 
+  // Legacy signup (fallback for non-Firebase)
   signup: (data: SignupRequest) =>
     apiClient<AuthResponse>("/auth/signup", { method: "POST", body: data }),
 
@@ -22,10 +28,4 @@ export const authApi = {
 
   updatePassword: (data: { currentPassword: string; newPassword: string }) =>
     apiClient<{ success: boolean }>("/auth/update-password", { method: "PUT", body: data }),
-
-  verifyOtp: (data: OtpVerifyRequest) =>
-    apiClient<AuthResponse>("/auth/verify-otp", { method: "POST", body: data }),
-
-  resendOtp: (data: OtpResendRequest) =>
-    apiClient<{ success: boolean; message: string }>("/auth/resend-otp", { method: "POST", body: data }),
 };

@@ -13,6 +13,9 @@ const billingRoutes = require('./routes/billing.routes');
 const aiConfigRoutes = require('./routes/aiConfig.routes');
 const integrationRoutes = require('./routes/integration.routes');
 const insightsRoutes = require('./routes/insights.routes');
+const settingsRoutes = require('./routes/settings.routes');
+const dashboardRoutes = require('./routes/dashboard.routes');
+const contactRoutes = require('./routes/contact.routes');
 const path = require('path');
 const fs = require('fs');
 const logger = require('./utils/logger');
@@ -90,6 +93,9 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/ai-config', aiConfigRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/insights', insightsRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/contact', contactRoutes);
 
 // Health check endpoints
 app.get('/health', (req, res) => {

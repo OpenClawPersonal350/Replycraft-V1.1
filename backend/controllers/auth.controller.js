@@ -3,9 +3,131 @@ const User = require('../models/User');
 const config = require('../config/config');
 const logger = require('../utils/logger');
 const { queueWelcomeEmail } = require('../queues/email.queue');
+const { initializeFirebase } = require('../middleware/firebaseAuth');
+const admin = require('firebase-admin');
 
 /**
- * Register a new user
+ * Firebase Login - Exchange Firebase token for JWT
+ * This handles both new and existing Firebase users
+ */
+const firebaseLogin = async (req, res) => {
+  try {
+    const { idToken, email, name } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Firebase ID token is required'
+      });
+    }
+
+    // Verify the Firebase ID token
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(idToken);
+    } catch (firebaseError) {
+      logger.logSecurity('Firebase token verification failed', { 
+        error: firebaseError.message,
+        code: firebaseError.code 
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid Firebase token'
+      });
+    }
+
+    const firebaseUid = decodedToken.uid;
+    const firebaseEmail = decodedToken.email || email;
+    const firebaseName = decodedToken.name || name || (email ? email.split('@')[0] : 'User');
+
+    // Check if user exists by firebaseUid or email
+    let user = await User.findOne({ 
+      $or: [
+        { firebaseUid: firebaseUid },
+        { email: firebaseEmail?.toLowerCase() }
+      ]
+    });
+
+    if (!user) {
+      // New user - create account
+      logger.logAuth('New Firebase user signup', { firebaseUid, email: firebaseEmail });
+
+      user = new User({
+        name: firebaseName,
+        email: firebaseEmail?.toLowerCase(),
+        firebaseUid: firebaseUid,
+        password: Math.random().toString(36).slice(-8), // Random password (not used for Firebase login)
+        plan: config.defaultPlan
+      });
+
+      await user.save();
+
+      // Queue welcome email
+      queueWelcomeEmail({
+        name: user.name,
+        email: user.email,
+        plan: user.plan,
+        dailyUsage: user.dailyUsage
+      }).catch(err => {
+        logger.error('Failed to queue welcome email', { error: err.message });
+      });
+    } else {
+      // Existing user - update firebaseUid if not set
+      if (!user.firebaseUid) {
+        user.firebaseUid = firebaseUid;
+        await user.save();
+      }
+
+      // Check if user is active
+      if (!user.isActive) {
+        return res.status(403).json({
+          success: false,
+          error: 'Account is deactivated'
+        });
+      }
+
+      // Update name if provided and different
+      if (name && name !== user.name) {
+        user.name = name;
+        await user.save();
+      }
+
+      logger.logAuth('Firebase user logged in', { userId: user._id, firebaseUid });
+    }
+
+    // Generate JWT token for backend
+    const token = jwt.sign(
+      { userId: user._id, email: user.email },
+      config.jwt.secret,
+      { expiresIn: config.jwt.expiresIn }
+    );
+
+    // Return user data and token
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        plan: user.plan,
+        dailyUsage: user.dailyUsage,
+        avatarUrl: user.avatarUrl
+      },
+      token
+    });
+
+  } catch (error) {
+    logger.error('Firebase Login Error', { error: error.message, stack: error.stack });
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to login with Firebase'
+    });
+  }
+};
+
+/**
+ * Register a new user (legacy - email/password)
  */
 const register = async (req, res) => {
   try {
@@ -106,7 +228,7 @@ const register = async (req, res) => {
 };
 
 /**
- * Login user
+ * Login user (legacy - email/password)
  */
 const login = async (req, res) => {
   try {
@@ -190,6 +312,7 @@ const login = async (req, res) => {
 };
 
 module.exports = {
+  firebaseLogin,
   register,
   login
 };

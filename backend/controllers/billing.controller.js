@@ -391,5 +391,120 @@ module.exports = {
   getSubscriptionStatus,
   cancelSubscription,
   handleWebhook,
-  PLANS
+  PLANS,
+  getUsage: async (req, res) => {
+    try {
+      const user = req.user;
+      const plan = PLANS[user.plan] || PLANS.free;
+      
+      return res.status(200).json({
+        success: true,
+        aiRepliesUsed: user.dailyUsage?.count || 0,
+        aiRepliesLimit: plan.dailyLimit,
+        platformsConnected: 0,
+        platformsLimit: null,
+        storageUsedGb: 0,
+        storageLimitGb: 10
+      });
+    } catch (error) {
+      logger.error('Failed to get usage', { error: error.message });
+      return res.status(500).json({ success: false, error: 'Failed to get usage' });
+    }
+  },
+  getInvoices: async (req, res) => {
+    try {
+      const user = req.user;
+      
+      // In a real app, you'd have an Invoice model
+      // For now, return empty array
+      return res.status(200).json({
+        success: true,
+        invoices: []
+      });
+    } catch (error) {
+      logger.error('Failed to get invoices', { error: error.message });
+      return res.status(500).json({ success: false, error: 'Failed to get invoices' });
+    }
+  },
+  // Get full billing info for frontend
+  getBillingInfo: async (req, res) => {
+    try {
+      const user = req.user;
+      const plan = PLANS[user.plan] || PLANS.free;
+
+      // Format plan for frontend
+      const currentPlan = {
+        id: plan.id,
+        name: plan.name,
+        price: plan.price === 0 ? '$0' : `$${plan.price / 100}`,
+        period: '/mo',
+        repliesPerDay: plan.dailyLimit === 5 ? '5/day' : 
+                       plan.dailyLimit === 200 ? '200/day' : 
+                       plan.dailyLimit === 1000 ? '1,000/day' : '5,000/day',
+        features: getPlanFeatures(plan.id),
+        icon: getPlanIcon(plan.id),
+        popular: plan.id === 'pro',
+        order: plan.id === 'free' ? 0 : plan.id === 'go' ? 1 : plan.id === 'pro' ? 2 : 3
+      };
+
+      // All plans
+      const allPlans = Object.entries(PLANS).map(([key, p]) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price === 0 ? '$0' : `$${p.price / 100}`,
+        period: '/mo',
+        repliesPerDay: p.dailyLimit === 5 ? '5/day' : 
+                       p.dailyLimit === 200 ? '200/day' : 
+                       p.dailyLimit === 1000 ? '1,000/day' : '5,000/day',
+        features: getPlanFeatures(p.id),
+        icon: getPlanIcon(p.id),
+        popular: p.id === 'pro',
+        order: p.id === 'free' ? 0 : p.id === 'go' ? 1 : p.id === 'pro' ? 2 : 3
+      }));
+
+      const nextBillingDate = user.subscriptionCurrentPeriodEnd 
+        ? new Date(user.subscriptionCurrentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : null;
+
+      return res.status(200).json({
+        success: true,
+        currentPlan,
+        allPlans,
+        nextBillingDate,
+        usage: {
+          aiRepliesUsed: user.dailyUsage?.count || 0,
+          aiRepliesLimit: plan.dailyLimit,
+          platformsConnected: 0,
+          platformsLimit: null,
+          storageUsedGb: 0,
+          storageLimitGb: 10
+        },
+        invoices: []
+      });
+    } catch (error) {
+      logger.error('Failed to get billing info', { error: error.message });
+      return res.status(500).json({ success: false, error: 'Failed to get billing info' });
+    }
+  }
 };
+
+// Helper functions
+function getPlanFeatures(planId) {
+  const features = {
+    free: ['5 AI replies/day', '1 platform', 'Basic analytics', 'Email support'],
+    go: ['200 AI replies/day', '3 platforms', 'Advanced analytics', 'Priority support'],
+    pro: ['1,000 AI replies/day', 'Unlimited platforms', 'Full analytics suite', 'Dedicated support', 'Custom templates'],
+    ultra: ['5,000 AI replies/day', 'Unlimited platforms', 'White-label reports', 'API access', 'Account manager']
+  };
+  return features[planId] || features.free;
+}
+
+function getPlanIcon(planId) {
+  const icons = {
+    free: 'zap',
+    go: 'rocket',
+    pro: 'crown',
+    ultra: 'sparkles'
+  };
+  return icons[planId] || 'zap';
+}

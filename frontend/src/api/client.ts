@@ -1,6 +1,9 @@
 // ==========================================
-// API Client - Central HTTP layer
+// API Client - Central HTTP layer with Firebase Auth
 // ==========================================
+
+import { auth, googleProvider } from './firebase';
+import { signInWithPopup, signOut } from 'firebase/auth';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
@@ -26,7 +29,24 @@ export class ApiError extends Error {
   }
 }
 
-function getAuthToken(): string | null {
+// Store Firebase ID token
+let firebaseIdToken: string | null = localStorage.getItem('firebase_token');
+
+export function setFirebaseToken(token: string) {
+  firebaseIdToken = token;
+  localStorage.setItem('firebase_token', token);
+}
+
+export function getFirebaseToken(): string | null {
+  return firebaseIdToken;
+}
+
+export function clearFirebaseToken() {
+  firebaseIdToken = null;
+  localStorage.removeItem('firebase_token');
+}
+
+export function getAuthToken(): string | null {
   return localStorage.getItem("auth_token");
 }
 
@@ -41,7 +61,11 @@ export function clearAuthToken() {
 export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, headers = {}, raw = false } = options;
 
-  const token = getAuthToken();
+  // Prefer Firebase token, fallback to regular JWT
+  const firebaseToken = getFirebaseToken();
+  const jwtToken = getAuthToken();
+  const token = firebaseToken || jwtToken;
+
   const defaultHeaders: Record<string, string> = {
     ...(raw ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -70,6 +94,7 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     // Auto-logout on 401
     if (response.status === 401) {
       clearAuthToken();
+      clearFirebaseToken();
       // Don't redirect here — let the auth hook handle it
     }
 
@@ -86,4 +111,41 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
   }
 
   return response.json();
+}
+
+// ==========================================
+// Firebase Authentication Functions
+// ==========================================
+
+export async function loginWithGoogle(): Promise<string> {
+  if (!auth || !googleProvider) {
+    throw new Error('Firebase not initialized');
+  }
+  
+  const result = await signInWithPopup(auth, googleProvider);
+  const idToken = await result.user.getIdToken();
+  
+  // Send token to backend to create/get user
+  const response = await apiClient<{ user: unknown; token: string }>('/auth/firebase-login', {
+    method: 'POST',
+    body: { idToken }
+  });
+  
+  // Store both Firebase token and backend JWT
+  setFirebaseToken(idToken);
+  setAuthToken(response.token);
+  
+  return response.token;
+}
+
+export async function logoutFirebase() {
+  if (auth) {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.log('Firebase logout error (can be ignored):', e);
+    }
+  }
+  clearFirebaseToken();
+  clearAuthToken();
 }
