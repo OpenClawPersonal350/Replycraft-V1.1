@@ -17,8 +17,6 @@ const replyQueue = new Queue('reply-generation', {
       type: 'exponential',
       delay: 2000
     },
-    removeOnComplete: true,
-    removeOnFail: false,
     timeout: 60000, // 60 second timeout
     // IDEMPOTENCY: Remove job if it completes within 24 hours
     removeOnComplete: {

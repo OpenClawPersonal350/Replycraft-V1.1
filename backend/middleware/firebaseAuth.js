@@ -12,21 +12,38 @@ function initializeFirebase() {
       !process.env.FIREBASE_CLIENT_EMAIL || 
       !process.env.FIREBASE_PRIVATE_KEY) {
     console.log('⚠️  Firebase credentials not configured. Firebase auth will be disabled.');
+    firebaseInitialized = false;
     return;
   }
 
   try {
+    // Handle both formats of private key - with or without PEM headers
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    
+    // If the key doesn't have PEM headers, add them
+    if (privateKey && !privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      // Check if it's a raw key (no headers) - add PEM formatting
+      if (privateKey.includes('=') || privateKey.length > 500) {
+        privateKey = `-----BEGIN PRIVATE KEY-----\n${privateKey}\n-----END PRIVATE KEY-----`;
+      }
+    }
+    
+    // Replace escaped newlines with actual newlines
+    privateKey = privateKey?.replace(/\\n/g, '\n');
+
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+        privateKey: privateKey
       })
     });
     firebaseInitialized = true;
     console.log('✅ Firebase Admin initialized');
   } catch (error) {
-    console.error('❌ Failed to initialize Firebase Admin:', error);
+    console.error('❌ Failed to initialize Firebase Admin:', error.message);
+    console.log('⚠️  Continuing without Firebase authentication');
+    firebaseInitialized = false;
   }
 }
 

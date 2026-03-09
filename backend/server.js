@@ -25,6 +25,7 @@ const { sendTestEmail, getEmailStatus } = require('./controllers/test.controller
 const { validateEmailConfig } = require('./config/emailValidator');
 const { handleWebhook, syncAllSubscriptions } = require('./controllers/webhook.controller');
 const authMiddleware = require('./middleware/auth.middleware');
+const { bullBoardRouter } = require('./config/bullBoard');
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads', 'avatars');
@@ -96,6 +97,11 @@ app.use('/api/insights', insightsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/contact', contactRoutes);
+
+// Bull Board - Queue Monitoring UI (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/admin/queues', bullBoardRouter);
+}
 
 // Health check endpoints
 app.get('/health', (req, res) => {
