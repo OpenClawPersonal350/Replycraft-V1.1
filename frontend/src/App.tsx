@@ -2,16 +2,22 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/hooks/use-theme";
-import { AuthProvider, useAuth } from "@/lib/useAuth";
+import { UserProvider } from "@/contexts/UserContext";
+import { AuthProvider, ProtectedRoute } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
+import Payment from "./pages/Payment";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentFailed from "./pages/PaymentFailed";
 import Signup from "./pages/Signup";
+import VerifyOtp from "./pages/VerifyOtp";
+import ProfileSetup from "./pages/onboarding/ProfileSetup";
+import PlanSelection from "./pages/onboarding/PlanSelection";
 import DashboardHome from "./pages/DashboardHome";
 import Reviews from "./pages/Reviews";
 import Analytics from "./pages/Analytics";
-import Insights from "./pages/Insights";
 import Integrations from "./pages/Integrations";
 import SettingsPage from "./pages/SettingsPage";
 import Billing from "./pages/Billing";
@@ -22,94 +28,71 @@ import Blog from "./pages/Blog";
 import Careers from "./pages/Careers";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import Contact from "./pages/Contact";
 import NotFound from "./pages/NotFound";
 import { DashboardLayout } from "./components/dashboard/DashboardLayout";
+import { ScrollToHash } from "./components/ScrollToHash";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000, // 30 seconds
+    },
+  },
+});
 
-// Protected route wrapper
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  return <DashboardLayout>{children}</DashboardLayout>;
-};
-
-// Public route wrapper - redirects to dashboard if authenticated
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const location = useLocation();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (isAuthenticated) {
-    const from = (location.state as any)?.from?.pathname || '/dashboard';
-    return <Navigate to={from} replace />;
-  }
-
-  return <>{children}</>;
-};
-
-const AppRoutes = () => {
-  return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/" element={<Index />} />
-      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
-      <Route path="/docs" element={<Documentation />} />
-      <Route path="/about" element={<About />} />
-      <Route path="/blog" element={<Blog />} />
-      <Route path="/careers" element={<Careers />} />
-      <Route path="/privacy" element={<Privacy />} />
-      <Route path="/terms" element={<Terms />} />
-      
-      {/* Protected routes */}
-      <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
-      <Route path="/dashboard/reviews" element={<ProtectedRoute><Reviews /></ProtectedRoute>} />
-      <Route path="/dashboard/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-      <Route path="/dashboard/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
-      <Route path="/dashboard/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
-      <Route path="/dashboard/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-      <Route path="/dashboard/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
-      <Route path="/dashboard/upgrade" element={<ProtectedRoute><Upgrade /></ProtectedRoute>} />
-      
-      {/* 404 */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
-};
+const DashboardWrapper = ({ children }: { children: React.ReactNode }) => (
+  <ProtectedRoute>
+    <DashboardLayout>{children}</DashboardLayout>
+  </ProtectedRoute>
+);
 
 const App = () => (
   <ThemeProvider>
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <UserProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <ScrollToHash />
+              <Routes>
+                {/* Public routes */}
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/verify-otp" element={<VerifyOtp />} />
+                <Route path="/onboarding/profile" element={<ProfileSetup />} />
+                <Route path="/onboarding/plan" element={<PlanSelection />} />
+                <Route path="/docs" element={<Documentation />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/careers" element={<Careers />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/contact" element={<Contact />} />
+
+                {/* Protected dashboard routes */}
+                <Route path="/dashboard" element={<DashboardWrapper><DashboardHome /></DashboardWrapper>} />
+                <Route path="/dashboard/reviews" element={<DashboardWrapper><Reviews /></DashboardWrapper>} />
+                <Route path="/dashboard/analytics" element={<DashboardWrapper><Analytics /></DashboardWrapper>} />
+                <Route path="/dashboard/integrations" element={<DashboardWrapper><Integrations /></DashboardWrapper>} />
+                <Route path="/dashboard/settings" element={<DashboardWrapper><SettingsPage /></DashboardWrapper>} />
+                <Route path="/dashboard/billing" element={<DashboardWrapper><Billing /></DashboardWrapper>} />
+                <Route path="/dashboard/upgrade" element={<ProtectedRoute><Upgrade /></ProtectedRoute>} />
+                <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
+                <Route path="/payment/success" element={<PaymentSuccess />} />
+                <Route path="/payment/failed" element={<PaymentFailed />} />
+
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </TooltipProvider>
+          </UserProvider>
+        </AuthProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   </ThemeProvider>
 );

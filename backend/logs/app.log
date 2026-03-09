@@ -1,0 +1,74 @@
+{"level":"info","message":"Review Fetcher worker started","timestamp":"2026-03-08 14:04:41"}
+{"concurrency":3,"level":"info","message":"[AIWorker] AI Worker started","timestamp":"2026-03-08 14:04:41"}
+{"concurrency":5,"level":"info","message":"[EmailWorker] Email worker started","timestamp":"2026-03-08 14:04:41"}
+{"level":"info","message":"[GoogleReviewFetcher] Worker started","timestamp":"2026-03-08 14:04:41"}
+{"level":"info","message":"Email configuration validated","timestamp":"2026-03-08 14:04:41","vars":["SMTP_HOST: smtp.gmail.com","SMTP_PORT: 587","SMTP_USER: your-email@gmail.com","SMTP_PASS: ***","EMAIL_FROM: ReplyCraft <noreply@replycraft.ai>"]}
+{"level":"info","message":"Connected to MongoDB","timestamp":"2026-03-08 14:04:41"}
+{"level":"info","message":"ReplyCraft AI Backend running on port 3000","timestamp":"2026-03-08 14:04:41"}
+{"level":"info","message":"Available endpoints: POST /api/auth/register, POST /api/auth/login, POST /api/reply/generate-reply, POST /api/reviews/process, GET /health","timestamp":"2026-03-08 14:04:41"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:04:51"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:04:51"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:04:51"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:04:56"}
+{"level":"info","message":"[GoogleReviewFetcher] Starting review fetch","timestamp":"2026-03-08 14:04:56"}
+{"count":0,"level":"info","message":"[GoogleReviewFetcher] Found active connections","timestamp":"2026-03-08 14:04:56"}
+{"action":"Google review fetch completed","duplicates":0,"errors":0,"level":"info","message":"[REVIEW] Google review fetch completed","newReviews":0,"timestamp":"2026-03-08 14:04:56"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:05:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:05:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:05:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:05:01"}
+{"level":"warn","message":"Endpoint not found","method":"GET","path":"/uploads/avatars/69ac4e1bcaa526246f1ab496_1772903681827.jpg","timestamp":"2026-03-08 14:09:22"}
+{"level":"warn","message":"Endpoint not found","method":"GET","path":"/uploads/avatars/69ac4e1bcaa526246f1ab496_1772903681827.jpg","timestamp":"2026-03-08 14:09:28"}
+{"error":"Cast to ObjectId failed for value \"google_1772959183171\" (type string) at path \"_id\" for model \"BusinessConnection\"","level":"error","message":"Disconnect error","timestamp":"2026-03-08 14:09:47","userId":"69ac4e1bcaa526246f1ab496"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:10:00"}
+{"level":"info","message":"[GoogleReviewFetcher] Starting review fetch","timestamp":"2026-03-08 14:10:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:10:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:10:00"}
+{"count":0,"level":"info","message":"[GoogleReviewFetcher] Found active connections","timestamp":"2026-03-08 14:10:00"}
+{"action":"Google review fetch completed","duplicates":0,"errors":0,"level":"info","message":"[REVIEW] Google review fetch completed","newReviews":0,"timestamp":"2026-03-08 14:10:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:10:00"}
+{"level":"warn","message":"Endpoint not found","method":"GET","path":"/uploads/avatars/69ac4e1bcaa526246f1ab496_1772903681827.jpg","timestamp":"2026-03-08 14:10:17"}
+{"avatarUrl":"/uploads/avatars/69ac4e1bcaa526246f1ab496_1772959231099.jpg","level":"info","message":"Avatar uploaded","timestamp":"2026-03-08 14:10:31","userId":"69ac4e1bcaa526246f1ab496"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:15:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:15:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:15:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:15:00"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:20:00"}
+{"level":"info","message":"[GoogleReviewFetcher] Starting review fetch","timestamp":"2026-03-08 14:20:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:20:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:20:00"}
+{"count":0,"level":"info","message":"[GoogleReviewFetcher] Found active connections","timestamp":"2026-03-08 14:20:00"}
+{"action":"Google review fetch completed","duplicates":0,"errors":0,"level":"info","message":"[REVIEW] Google review fetch completed","newReviews":0,"timestamp":"2026-03-08 14:20:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:20:00"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:25:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:25:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:25:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:25:00"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:30:00"}
+{"level":"info","message":"[GoogleReviewFetcher] Starting review fetch","timestamp":"2026-03-08 14:30:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:30:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:30:00"}
+{"count":0,"level":"info","message":"[GoogleReviewFetcher] Found active connections","timestamp":"2026-03-08 14:30:00"}
+{"action":"Google review fetch completed","duplicates":0,"errors":0,"level":"info","message":"[REVIEW] Google review fetch completed","newReviews":0,"timestamp":"2026-03-08 14:30:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:30:00"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:35:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:35:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:35:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:35:00"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:40:00"}
+{"level":"info","message":"[GoogleReviewFetcher] Starting review fetch","timestamp":"2026-03-08 14:40:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:40:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:40:00"}
+{"count":0,"level":"info","message":"[GoogleReviewFetcher] Found active connections","timestamp":"2026-03-08 14:40:00"}
+{"action":"Google review fetch completed","duplicates":0,"errors":0,"level":"info","message":"[REVIEW] Google review fetch completed","newReviews":0,"timestamp":"2026-03-08 14:40:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:40:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:45:00"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:45:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:45:00"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:45:00"}
+{"level":"info","message":"Running review fetch","timestamp":"2026-03-08 14:50:00"}
+{"count":0,"level":"info","message":"Found active connections","timestamp":"2026-03-08 14:50:04"}
+{"action":"Review fetch completed","duplicatesSkipped":0,"level":"info","message":"[REVIEW] Review fetch completed","newReviews":0,"queuedCount":0,"timestamp":"2026-03-08 14:50:07"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:50:16"}
+{"level":"info","message":"AI Worker shutting down gracefully","timestamp":"2026-03-08 14:53:41"}
+{"level":"info","message":"Email worker shutting down...","timestamp":"2026-03-08 14:53:41"}

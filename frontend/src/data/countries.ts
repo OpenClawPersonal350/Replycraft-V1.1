@@ -1,0 +1,55 @@
+export interface Country {
+  name: string;
+  code: string;
+  dialCode: string;
+  flag: string;
+  maxDigits: number;
+}
+
+export const countries: Country[] = [
+  { name: "India", code: "IN", dialCode: "+91", flag: "🇮🇳", maxDigits: 10 },
+  { name: "United States", code: "US", dialCode: "+1", flag: "🇺🇸", maxDigits: 10 },
+  { name: "United Kingdom", code: "GB", dialCode: "+44", flag: "🇬🇧", maxDigits: 10 },
+  { name: "Canada", code: "CA", dialCode: "+1", flag: "🇨🇦", maxDigits: 10 },
+  { name: "Australia", code: "AU", dialCode: "+61", flag: "🇦🇺", maxDigits: 9 },
+  { name: "Germany", code: "DE", dialCode: "+49", flag: "🇩🇪", maxDigits: 11 },
+  { name: "France", code: "FR", dialCode: "+33", flag: "🇫🇷", maxDigits: 9 },
+  { name: "Japan", code: "JP", dialCode: "+81", flag: "🇯🇵", maxDigits: 10 },
+  { name: "China", code: "CN", dialCode: "+86", flag: "🇨🇳", maxDigits: 11 },
+  { name: "Brazil", code: "BR", dialCode: "+55", flag: "🇧🇷", maxDigits: 11 },
+  { name: "Mexico", code: "MX", dialCode: "+52", flag: "🇲🇽", maxDigits: 10 },
+  { name: "South Korea", code: "KR", dialCode: "+82", flag: "🇰🇷", maxDigits: 10 },
+  { name: "Italy", code: "IT", dialCode: "+39", flag: "🇮🇹", maxDigits: 10 },
+  { name: "Spain", code: "ES", dialCode: "+34", flag: "🇪🇸", maxDigits: 9 },
+  { name: "Netherlands", code: "NL", dialCode: "+31", flag: "🇳🇱", maxDigits: 9 },
+  { name: "Singapore", code: "SG", dialCode: "+65", flag: "🇸🇬", maxDigits: 8 },
+  { name: "UAE", code: "AE", dialCode: "+971", flag: "🇦🇪", maxDigits: 9 },
+  { name: "Saudi Arabia", code: "SA", dialCode: "+966", flag: "🇸🇦", maxDigits: 9 },
+  { name: "South Africa", code: "ZA", dialCode: "+27", flag: "🇿🇦", maxDigits: 9 },
+  { name: "Nigeria", code: "NG", dialCode: "+234", flag: "🇳🇬", maxDigits: 10 },
+  { name: "Indonesia", code: "ID", dialCode: "+62", flag: "🇮🇩", maxDigits: 12 },
+  { name: "Thailand", code: "TH", dialCode: "+66", flag: "🇹🇭", maxDigits: 9 },
+  { name: "Malaysia", code: "MY", dialCode: "+60", flag: "🇲🇾", maxDigits: 10 },
+  { name: "Philippines", code: "PH", dialCode: "+63", flag: "🇵🇭", maxDigits: 10 },
+  { name: "Pakistan", code: "PK", dialCode: "+92", flag: "🇵🇰", maxDigits: 10 },
+  { name: "Bangladesh", code: "BD", dialCode: "+880", flag: "🇧🇩", maxDigits: 10 },
+  { name: "Russia", code: "RU", dialCode: "+7", flag: "🇷🇺", maxDigits: 10 },
+  { name: "Turkey", code: "TR", dialCode: "+90", flag: "🇹🇷", maxDigits: 10 },
+  { name: "Egypt", code: "EG", dialCode: "+20", flag: "🇪🇬", maxDigits: 10 },
+  { name: "Argentina", code: "AR", dialCode: "+54", flag: "🇦🇷", maxDigits: 10 },
+  { name: "Colombia", code: "CO", dialCode: "+57", flag: "🇨🇴", maxDigits: 10 },
+  { name: "Chile", code: "CL", dialCode: "+56", flag: "🇨🇱", maxDigits: 9 },
+  { name: "New Zealand", code: "NZ", dialCode: "+64", flag: "🇳🇿", maxDigits: 9 },
+  { name: "Ireland", code: "IE", dialCode: "+353", flag: "🇮🇪", maxDigits: 9 },
+  { name: "Sweden", code: "SE", dialCode: "+46", flag: "🇸🇪", maxDigits: 9 },
+  { name: "Norway", code: "NO", dialCode: "+47", flag: "🇳🇴", maxDigits: 8 },
+  { name: "Denmark", code: "DK", dialCode: "+45", flag: "🇩🇰", maxDigits: 8 },
+  { name: "Finland", code: "FI", dialCode: "+358", flag: "🇫🇮", maxDigits: 10 },
+  { name: "Portugal", code: "PT", dialCode: "+351", flag: "🇵🇹", maxDigits: 9 },
+  { name: "Poland", code: "PL", dialCode: "+48", flag: "🇵🇱", maxDigits: 9 },
+  { name: "Israel", code: "IL", dialCode: "+972", flag: "🇮🇱", maxDigits: 9 },
+  { name: "Kenya", code: "KE", dialCode: "+254", flag: "🇰🇪", maxDigits: 9 },
+  { name: "Vietnam", code: "VN", dialCode: "+84", flag: "🇻🇳", maxDigits: 10 },
+  { name: "Sri Lanka", code: "LK", dialCode: "+94", flag: "🇱🇰", maxDigits: 9 },
+  { name: "Nepal", code: "NP", dialCode: "+977", flag: "🇳🇵", maxDigits: 10 },
+];

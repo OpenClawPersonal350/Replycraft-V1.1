@@ -1,0 +1,12 @@
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:04:56"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:05:01"}
+{"error":"Cast to ObjectId failed for value \"google_1772959183171\" (type string) at path \"_id\" for model \"BusinessConnection\"","level":"error","message":"Disconnect error","timestamp":"2026-03-08 14:09:47","userId":"69ac4e1bcaa526246f1ab496"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:10:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:15:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:20:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:25:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:30:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:35:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:40:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:45:00"}
+{"error":"replyQueue.getNextJob is not a function","level":"error","message":"Failed to log queue metrics","timestamp":"2026-03-08 14:50:16"}

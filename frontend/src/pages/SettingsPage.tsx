@@ -1,588 +1,503 @@
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Save, Upload, User, Mail, Phone, Building, Globe, Sparkles, Plus, Pencil, Trash2, Star, Check, X } from "lucide-react";
+import { useState, useRef, useMemo } from "react";
+import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { getProfile, updateProfile, getUser, apiService } from "@/lib/api";
-import { UserAvatar } from "@/components/ui/UserAvatar";
-import { ImageCropper } from "@/components/ui/ImageCropper";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Camera, User, Bell, Bot, MapPin, Phone, Mail, Shield, CalendarDays, Eye, EyeOff, Check, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import ImageCropper from "@/components/ImageCropper";
+import { countries, type Country } from "@/data/countries";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/lib/useAuth";
-
-// Countries list
-const COUNTRIES = [
-  { code: 'US', name: 'United States', phoneLength: 10 },
-  { code: 'GB', name: 'United Kingdom', phoneLength: 10 },
-  { code: 'IN', name: 'India', phoneLength: 10 },
-  { code: 'CA', name: 'Canada', phoneLength: 10 },
-  { code: 'AU', name: 'Australia', phoneLength: 9 },
-  { code: 'DE', name: 'Germany', phoneLength: 10 },
-  { code: 'FR', name: 'France', phoneLength: 9 },
-  { code: 'JP', name: 'Japan', phoneLength: 10 },
-  { code: 'BR', name: 'Brazil', phoneLength: 11 },
-  { code: 'MX', name: 'Mexico', phoneLength: 10 },
-];
-
-// Common timezones
-const TIMEZONES = [
-  { value: 'UTC', label: 'UTC' },
-  { value: 'America/New_York', label: 'Eastern Time (ET)' },
-  { value: 'America/Chicago', label: 'Central Time (CT)' },
-  { value: 'America/Denver', label: 'Mountain Time (MT)' },
-  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
-  { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
-  { value: 'Pacific/Honolulu', label: 'Hawaii Time (HST)' },
-  { value: 'Europe/London', label: 'London (GMT/BST)' },
-  { value: 'Europe/Paris', label: 'Paris (CET)' },
-  { value: 'Europe/Berlin', label: 'Berlin (CET)' },
-  { value: 'Asia/Tokyo', label: 'Tokyo (JST)' },
-  { value: 'Asia/Shanghai', label: 'Shanghai (CST)' },
-  { value: 'Asia/Dubai', label: 'Dubai (GST)' },
-  { value: 'Asia/Kolkata', label: 'India (IST)' },
-  { value: 'Australia/Sydney', label: 'Sydney (AEST)' },
-  { value: 'Pacific/Auckland', label: 'Auckland (NZST)' },
-];
-
-// Brand tones
-const BRAND_TONES = [
-  { value: 'professional', label: 'Professional' },
-  { value: 'casual', label: 'Casual' },
-  { value: 'friendly', label: 'Friendly' },
-];
-
-// Reply modes
-const REPLY_MODES = [
-  { value: 'manual', label: 'Manual - Review before sending' },
-  { value: 'auto', label: 'Auto - Send immediately' },
-];
-
-interface AIConfig {
-  _id: string;
-  configName: string;
-  businessName: string;
-  brandTone: string;
-  emojiAllowed: boolean;
-  replyMode: string;
-  replyDelayMinutes: number;
-  isDefault: boolean;
-}
+import { useUser } from "@/contexts/UserContext";
+import { useUpdateProfile, useUploadAvatar, useSettings, useUpdateSettings, useUpdateNotifications, useChangePassword } from "@/api/hooks";
 
 const SettingsPage = () => {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const { user, setAvatarUrl } = useUser();
+  const [fullName, setFullName] = useState(user.fullName);
+  const [phone, setPhone] = useState("9876543210");
+  const [address, setAddress] = useState("123 Main Street");
+  const [city, setCity] = useState("Mumbai");
+  const [dob, setDob] = useState<Date | undefined>();
+  const [dobOpen, setDobOpen] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { refreshUser } = useAuth();
-  
-  // User Profile Section
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [countryCode, setCountryCode] = useState("US");
-  const [businessName, setBusinessName] = useState("");
-  const [timezone, setTimezone] = useState("UTC");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // AI Configurations
-  const [configs, setConfigs] = useState<AIConfig[]>([]);
-  const [configsLoading, setConfigsLoading] = useState(true);
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [editingConfig, setEditingConfig] = useState<AIConfig | null>(null);
-  
-  // Config form
-  const [configName, setConfigName] = useState("");
-  const [configBusinessName, setConfigBusinessName] = useState("");
-  const [configBrandTone, setConfigBrandTone] = useState("professional");
-  const [configEmojiAllowed, setConfigEmojiAllowed] = useState(true);
-  const [configReplyMode, setConfigReplyMode] = useState("manual");
-  const [configReplyDelay, setConfigReplyDelay] = useState("0");
+  // AI Settings state
+  const [brandTone, setBrandTone] = useState("professional");
+  const [useEmojis, setUseEmojis] = useState(false);
+  const [replyMode, setReplyMode] = useState("approval");
+  const [replyDelay, setReplyDelay] = useState("1h");
+  const [replyLanguage, setReplyLanguage] = useState("english");
 
-  // Cleanup object URL when component unmounts
-  useEffect(() => {
-    return () => {
-      if (cropImageSrc && cropImageSrc.startsWith('blob:')) {
-        URL.revokeObjectURL(cropImageSrc);
-      }
-    };
-  }, []);
+  // Notification state
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [negativeAlerts, setNegativeAlerts] = useState(true);
 
-  useEffect(() => {
-    fetchProfile();
-    fetchAIConfigs();
-    
-    const handleProfileUpdate = () => {
-      const updatedUser = getUser();
-      if (updatedUser) {
-        setAvatarUrl(updatedUser.avatarUrl || "");
-      }
-    };
-    window.addEventListener('user_profile_updated', handleProfileUpdate);
-    return () => window.removeEventListener('user_profile_updated', handleProfileUpdate);
-  }, []);
+  // Security state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
-  const fetchProfile = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await getProfile();
-      
-      if (response.success) {
-        if (response.name !== undefined) setName(response.name);
-        if (response.email !== undefined) setEmail(response.email);
-        if (response.phoneNumber !== undefined) setPhoneNumber(response.phoneNumber || "");
-        if (response.businessName !== undefined) setBusinessName(response.businessName || "");
-        if (response.timezone !== undefined) setTimezone(response.timezone || "UTC");
-        if (response.avatarUrl !== undefined) setAvatarUrl(response.avatarUrl);
-      }
-    } catch (err: any) {
-      console.error("Failed to fetch profile:", err);
-      setError(err.message || "Failed to load profile");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchAIConfigs = async () => {
-    try {
-      setConfigsLoading(true);
-      const response = await apiService.getAIConfigurations();
-      if (response.success) {
-        setConfigs(response.configurations || []);
-      }
-    } catch (err: any) {
-      console.error("Failed to fetch AI configs:", err);
-    } finally {
-      setConfigsLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const response = await updateProfile({
-        name,
-        phoneNumber: phoneNumber || null,
-        businessName: businessName || null,
-        timezone,
-      });
-
-      if (response.success) {
-        setSuccess("Settings saved successfully!");
-        
-        const currentUser = getUser();
-        if (currentUser) {
-          const updatedUser = { ...currentUser, name, avatarUrl };
-          localStorage.setItem('replycraft_user', JSON.stringify(updatedUser));
-        }
-        
-        await refreshUser();
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        setError(response.error || "Failed to save settings");
-      }
-    } catch (err: any) {
-      console.error("Failed to save profile:", err);
-      setError(err.message || "Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
-  };
+  // Password validation rules (same as signup)
+  const securityPasswordRules = [
+    { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
+    { label: "One uppercase letter", test: (p: string) => /[A-Z]/.test(p) },
+    { label: "One lowercase letter", test: (p: string) => /[a-z]/.test(p) },
+    { label: "One symbol (!@#$...)", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+  ];
+  const securityRuleResults = useMemo(() => securityPasswordRules.map((r) => r.test(newPassword)), [newPassword]);
+  const securityAllRulesPassed = securityRuleResults.every(Boolean);
+  const securityPasswordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const imageUrl = URL.createObjectURL(file);
-    setSelectedFile(file);
-    setCropImageSrc(imageUrl);
-    if (e.target) e.target.value = '';
-  };
-
-  const handleCropCancel = () => {
-    if (cropImageSrc && cropImageSrc.startsWith('blob:')) {
-      URL.revokeObjectURL(cropImageSrc);
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file", description: "Please select an image file.", variant: "destructive" });
+      return;
     }
-    setCropImageSrc(null);
-    setSelectedFile(null);
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
-  const handleCropComplete = async (croppedBlob: Blob) => {
+  const handleCropComplete = async (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    setAvatarUrl(url);
+    setCropSrc(null);
+    toast({ title: "Photo updated", description: "Your profile picture has been changed." });
+    // Upload via API
+    const formData = new FormData();
+    formData.append("avatar", blob, "avatar.jpg");
     try {
-      if (cropImageSrc && cropImageSrc.startsWith('blob:')) {
-        URL.revokeObjectURL(cropImageSrc);
-      }
-      setCropImageSrc(null);
-      setSelectedFile(null);
-      
-      const response = await apiService.uploadAvatar(croppedBlob);
-      
-      if (response.success && response.fullAvatarUrl) {
-        setAvatarUrl(response.fullAvatarUrl);
-        toast({ title: "Avatar updated successfully" });
-        
-        const currentUser = getUser();
-        if (currentUser) {
-          const updatedUser = { ...currentUser, avatarUrl: response.fullAvatarUrl };
-          localStorage.setItem('replycraft_user', JSON.stringify(updatedUser));
-        }
-        
-        await refreshUser();
-        window.dispatchEvent(new Event('user_profile_updated'));
-      } else {
-        toast({ variant: "destructive", title: "Failed to upload avatar" });
-      }
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Failed to upload avatar", description: err.message });
+      // TODO: Uncomment when backend connected
+      // await uploadAvatarMutation.mutateAsync(formData);
+    } catch { /* handled by mutation */ }
+  };
+
+  const handlePhoneChange = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    if (digits.length <= selectedCountry.maxDigits) {
+      setPhone(digits);
     }
   };
 
-  // AI Config handlers
-  const openConfigModal = (config?: AIConfig) => {
-    if (config) {
-      setEditingConfig(config);
-      setConfigName(config.configName);
-      setConfigBusinessName(config.businessName || '');
-      setConfigBrandTone(config.brandTone);
-      setConfigEmojiAllowed(config.emojiAllowed);
-      setConfigReplyMode(config.replyMode);
-      setConfigReplyDelay(config.replyDelayMinutes?.toString() || '0');
-    } else {
-      setEditingConfig(null);
-      setConfigName('');
-      setConfigName('');
-      setConfigBusinessName('');
-      setConfigBrandTone('professional');
-      setConfigEmojiAllowed(true);
-      setConfigReplyMode('manual');
-      setConfigReplyDelay('0');
-    }
-    setShowConfigModal(true);
-  };
-
-  const handleSaveConfig = async () => {
+  const handleSaveProfile = async () => {
     try {
-      const configData = {
-        configName,
-        businessName: configBusinessName,
-        brandTone: configBrandTone,
-        emojiAllowed: configEmojiAllowed,
-        replyMode: configReplyMode,
-        replyDelayMinutes: parseInt(configReplyDelay) || 0,
-      };
-
-      let response;
-      if (editingConfig) {
-        response = await apiService.updateAIConfiguration(editingConfig._id, configData);
-      } else {
-        response = await apiService.createAIConfiguration(configData);
-      }
-
-      if (response.success) {
-        toast({ title: editingConfig ? 'Configuration updated' : 'Configuration created' });
-        setShowConfigModal(false);
-        fetchAIConfigs();
-      } else {
-        toast({ variant: "destructive", title: response.error || 'Failed to save configuration' });
-      }
+      // TODO: Uncomment when backend connected
+      // await updateProfileMutation.mutateAsync({
+      //   fullName, phone, countryCode: selectedCountry.code,
+      //   address, city, dateOfBirth: dob?.toISOString(),
+      // });
+      toast({ title: "Profile saved", description: "Your profile has been updated." });
     } catch (err: any) {
-      toast({ variant: "destructive", title: err.message || 'Failed to save configuration' });
+      toast({ title: "Error", description: err?.message || "Failed to save profile.", variant: "destructive" });
     }
   };
 
-  const handleDeleteConfig = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this configuration?')) return;
-    
+  const handleSaveAI = async () => {
     try {
-      const response = await apiService.deleteAIConfiguration(id);
-      if (response.success) {
-        toast({ title: 'Configuration deleted' });
-        fetchAIConfigs();
-      } else {
-        toast({ variant: "destructive", title: response.error || 'Failed to delete' });
-      }
+      // TODO: Uncomment when backend connected
+      // await updateSettingsMutation.mutateAsync({ brandTone, replyLanguage, useEmojis, replyMode, replyDelay });
+      toast({ title: "AI settings saved", description: "Reply preferences updated." });
     } catch (err: any) {
-      toast({ variant: "destructive", title: err.message || 'Failed to delete' });
+      toast({ title: "Error", description: err?.message || "Failed to save settings.", variant: "destructive" });
     }
   };
 
-  const handleSetDefault = async (id: string) => {
+  const handleSaveNotifications = async () => {
     try {
-      const response = await apiService.setDefaultAIConfiguration(id);
-      if (response.success) {
-        toast({ title: 'Default configuration set' });
-        fetchAIConfigs();
-      }
+      // TODO: Uncomment when backend connected
+      // await updateNotificationsMutation.mutateAsync({ emailNotifications, negativeAlerts });
+      toast({ title: "Notification settings saved" });
     } catch (err: any) {
-      toast({ variant: "destructive", title: err.message || 'Failed to set default' });
+      toast({ title: "Error", description: err?.message || "Failed to save.", variant: "destructive" });
     }
   };
 
-  const getAvatarUrl = () => {
-    if (!avatarUrl) return undefined;
-    if (avatarUrl.startsWith('http')) return avatarUrl;
-    const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
-    return `${baseUrl}${avatarUrl}`;
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Passwords don't match", description: "New password and confirm password must be the same.", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast({ title: "Password too short", description: "Password must be at least 8 characters.", variant: "destructive" });
+      return;
+    }
+    try {
+      // TODO: Uncomment when backend connected
+      // await changePasswordMutation.mutateAsync({ currentPassword, newPassword });
+      toast({ title: "Password updated", description: "Your password has been changed successfully." });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.message || "Failed to change password.", variant: "destructive" });
+    }
   };
 
-  const currentUser = { name, avatarUrl: getAvatarUrl(), email };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const sectionAnim = {
+    initial: { opacity: 0, y: 16 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.4 },
+  };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h1 className="text-3xl font-bold text-foreground mb-2">Settings</h1>
-        <p className="text-muted-foreground mb-8">Manage your profile and AI reply configurations</p>
+    <div className="space-y-6 max-w-3xl mx-auto lg:mx-0 mx-auto lg:mx-0">
+      {cropSrc && (
+        <ImageCropper imageSrc={cropSrc} onCropComplete={handleCropComplete} onCancel={() => setCropSrc(null)} />
+      )}
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm">
-            {error}
-          </div>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground">Manage your profile and preferences.</p>
+      </div>
 
-        {success && (
-          <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-500 text-sm">
-            {success}
-          </div>
-        )}
+      <Tabs defaultValue="profile" className="w-full">
+        <TabsList className="glass w-full justify-start gap-1 p-1 h-auto flex-wrap">
+          <TabsTrigger value="profile" className="gap-2 data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground">
+            <User className="w-3.5 h-3.5" /> Profile
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="gap-2 data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground">
+            <Bot className="w-3.5 h-3.5" /> AI Replies
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-2 data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground">
+            <Bell className="w-3.5 h-3.5" /> Notifications
+          </TabsTrigger>
+          <TabsTrigger value="security" className="gap-2 data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground">
+            <Shield className="w-3.5 h-3.5" /> Security
+          </TabsTrigger>
+        </TabsList>
 
-        {/* SECTION 1: User Profile */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="w-5 h-5" />
-              Profile Information
-            </CardTitle>
-            <CardDescription>Manage your personal information</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Avatar */}
-            <div className="flex items-center gap-6">
-              <UserAvatar user={currentUser} className="w-24 h-24" />
-              <div>
-                <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
-                <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Photo
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">JPG, PNG or GIF. Max 5MB.</p>
+        {/* PROFILE TAB */}
+        <TabsContent value="profile">
+          <motion.div {...sectionAnim} className="gla4 sm:p-6 space-y-5 sm: rounded-xl p-6 space-y-6">
+            <div className="flex items-center gap-5">
+              <div className="relative group cursor-pointer shrink-0" onClick={() => fileRef.current?.click()}>
+                <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-border group-hover:border-primary transition-colors bg-muted/50 flex items-center justify-center">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-8 h-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full gradient-primary flex items-center justify-center border-2 border-background">
+                  <Camera className="w-3 h-3 text-primary-foreground" />
+                </div>
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-foreground truncate">{fullName || "Your Name"}</h2>
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5" /> {user.email}
+                </p>
+                <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full mt-1 inline-block">
+                  {user.plan} Plan
+                </span>
               </div>
             </div>
 
-            {/* Name */}
-            <div className="grid gap-2">
-              <Label>Full Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" />
+            <div className="h-px bg-border" />
+
+            <div className="space-y-2">
+              <Label className="text-foreground">Full Name</Label>
+              <Input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="bg-muted/30 border-border text-foreground"
+              />
             </div>
 
-            {/* Email */}
-            <div className="grid gap-2">
-              <Label>Email</Label>
-              <Input value={email} disabled className="bg-muted" />
-              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+            {/* Date of Birth */}
+            <div className="space-y-2">
+              <Label className="text-foreground flex items-center gap-2">
+                <CalendarDays className="w-3.5 h-3.5" /> Date of Birth
+              </Label>
+              <Popover open={dobOpen} onOpenChange={setDobOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal bg-muted/30 border-border text-foreground"
+                  >
+                    {dob ? format(dob, "PPP") : <span className="text-muted-foreground">Select your date of birth</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-card border-border" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dob}
+                    onSelect={(date) => {
+                      setDob(date);
+                      setDobOpen(false);
+                    }}
+                    fromYear={1920}
+                    toYear={new Date().getFullYear() - 13}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
-            {/* Phone with Country */}
-            <div className="grid gap-2">
-              <Label>Phone Number</Label>
+            {/* Phone */}
+            <div className="space-y-2">
+              <Label className="text-foreground flex items-center gap-2">
+                <Phone className="w-3.5 h-3.5" /> Phone Number
+              </Label>
               <div className="flex gap-2">
-                <Select value={countryCode} onValueChange={setCountryCode}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COUNTRIES.map(c => (
-                      <SelectItem key={c.code} value={c.code}>{c.code} ({c.name})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-[130px] justify-start gap-2 bg-muted/30 border-border text-foreground shrink-0"
+                    >
+                      <span className="text-lg">{selectedCountry.flag}</span>
+                      <span className="text-sm font-mono">{selectedCountry.dialCode}</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[280px] p-0 bg-card border-border" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search country..." />
+                      <CommandList>
+                        <CommandEmpty>No country found.</CommandEmpty>
+                        <CommandGroup>
+                          {countries.map((c) => (
+                            <CommandItem
+                              key={c.code}
+                              value={`${c.name} ${c.dialCode}`}
+                              onSelect={() => {
+                                setSelectedCountry(c);
+                                setPhone("");
+                                setCountryOpen(false);
+                              }}
+                            >
+                              <span className="text-lg mr-2">{c.flag}</span>
+                              <span className="flex-1">{c.name}</span>
+                              <span className="text-muted-foreground font-mono text-sm">{c.dialCode}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <Input
-                  type="tel"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="Phone number"
-                  className="flex-1"
+                  value={phone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  placeholder={`${"0".repeat(selectedCountry.maxDigits)}`}
+                  maxLength={selectedCountry.maxDigits}
+                  inputMode="numeric"
+                  className="bg-muted/30 border-border text-foreground font-mono flex-1"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {selectedCountry.name} • {selectedCountry.maxDigits} digits
+              </p>
+            </div>
+
+            {/* Address + City */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-foreground flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5" /> Address
+                </Label>
+                <Input
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Street address"
+                  className="bg-muted/30 border-border text-foreground"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-foreground">City</Label>
+                <Input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="City"
+                  className="bg-muted/30 border-border text-foreground"
                 />
               </div>
             </div>
 
-            {/* Business Name */}
-            <div className="grid gap-2">
-              <Label>Business Name</Label>
-              <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Your business name" />
-            </div>
+            <Button onClick={handleSaveProfile} className="gradient-primary text-primary-foreground hover:opacity-90">
+              Save Profile
+            </Button>
+          </motion.div>
+        </TabsContent>
 
-            {/* Timezone */}
-            <div className="grid gap-2">
-              <Label>Timezone</Label>
-              <Select value={timezone} onValueChange={setTimezone}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select timezone" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIMEZONES.map(tz => (
-                    <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
-                  ))}
+        {/* AI REPLIES TAB */}
+        <TabsContent value="ai">
+          <motion.div {...sectionAnim} className="glass rounded-xl p-6 space-y-5">
+            <div className="space-y-2">
+              <Label className="text-foreground">Brand Tone</Label>
+              <Select value={brandTone} onValueChange={setBrandTone}>
+                <SelectTrigger className="bg-muted/30 border-border text-foreground"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="professional">Professional</SelectItem>
+                  <SelectItem value="friendly">Friendly</SelectItem>
+                  <SelectItem value="casual">Casual</SelectItem>
+                  <SelectItem value="formal">Formal</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* SECTION 2: AI Reply Profiles */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5" />
-                AI Reply Profiles
-              </CardTitle>
-              <CardDescription>Create multiple AI configurations for different use cases</CardDescription>
+            <div className="space-y-2">
+              <Label className="text-foreground">Reply Language</Label>
+              <Select value={replyLanguage} onValueChange={setReplyLanguage}>
+                <SelectTrigger className="bg-muted/30 border-border text-foreground"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="english">English</SelectItem>
+                  <SelectItem value="spanish">Spanish</SelectItem>
+                  <SelectItem value="french">French</SelectItem>
+                  <SelectItem value="german">German</SelectItem>
+                  <SelectItem value="hindi">Hindi</SelectItem>
+                  <SelectItem value="auto">Auto-detect</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Button onClick={() => openConfigModal()} size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Profile
+
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/20">
+              <div>
+                <Label className="text-foreground">Use Emojis</Label>
+                <p className="text-xs text-muted-foreground">Include emojis in AI replies</p>
+              </div>
+              <Switch checked={useEmojis} onCheckedChange={setUseEmojis} />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-foreground">Reply Mode</Label>
+              <Select value={replyMode} onValueChange={setReplyMode}>
+                <SelectTrigger className="bg-muted/30 border-border text-foreground"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="auto">Automatic</SelectItem>
+                  <SelectItem value="approval">Manual Approval</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {replyMode === "auto" ? "AI replies are sent automatically" : "You'll review and approve each reply"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-foreground">Reply Delay</Label>
+              <Select value={replyDelay} onValueChange={setReplyDelay}>
+                <SelectTrigger className="bg-muted/30 border-border text-foreground"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="instant">Instant</SelectItem>
+                  <SelectItem value="1h">1 Hour</SelectItem>
+                  <SelectItem value="6h">6 Hours</SelectItem>
+                  <SelectItem value="24h">24 Hours</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button onClick={handleSaveAI} className="gradient-primary text-primary-foreground hover:opacity-90">
+              Save AI Settings
             </Button>
-          </CardHeader>
-          <CardContent>
-            {configsLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </motion.div>
+        </TabsContent>
+
+        {/* NOTIFICATIONS TAB */}
+        <TabsContent value="notifications">
+          <motion.div {...sectionAnim} className="glass rounded-xl p-6 space-y-5">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/20">
+              <div>
+                <Label className="text-foreground">Email Notifications</Label>
+                <p className="text-xs text-muted-foreground">Get notified about new reviews</p>
               </div>
-            ) : configs.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Sparkles className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>No AI profiles yet</p>
-                <p className="text-sm">Create your first profile to get started</p>
+              <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/20">
+              <div>
+                <Label className="text-foreground">Negative Review Alerts</Label>
+                <p className="text-xs text-muted-foreground">Instant alerts for reviews below 3 stars</p>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {configs.map(config => (
-                  <div key={config._id} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Sparkles className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{config.configName}</span>
-                          {config.isDefault && (
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">Default</span>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {config.businessName || 'No business name'} • {config.brandTone} • {config.replyMode}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!config.isDefault && (
-                        <Button variant="ghost" size="sm" onClick={() => handleSetDefault(config._id)} title="Set as default">
-                          <Star className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => openConfigModal(config)}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteConfig(config._id)}>
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
-                    </div>
+              <Switch checked={negativeAlerts} onCheckedChange={setNegativeAlerts} />
+            </div>
+
+            <Button onClick={handleSaveNotifications} className="gradient-primary text-primary-foreground hover:opacity-90">
+              Save Notifications
+            </Button>
+          </motion.div>
+        </TabsContent>
+
+        {/* SECURITY TAB */}
+        <TabsContent value="security">
+          <motion.div {...sectionAnim} className="glass rounded-xl p-6 space-y-5">
+            <div className="space-y-2">
+              <Label className="text-foreground">Current Password</Label>
+              <div className="relative">
+                <Input type={showCurrentPw ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="••••••••" className="bg-muted/30 border-border text-foreground pr-10" />
+                <button type="button" onClick={() => setShowCurrentPw(!showCurrentPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-foreground">New Password</Label>
+              <div className="relative">
+                <Input type={showNewPw ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" className="bg-muted/30 border-border text-foreground pr-10" />
+                <button type="button" onClick={() => setShowNewPw(!showNewPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Live password validation */}
+            {newPassword.length > 0 && (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-1">
+                {securityPasswordRules.map((rule, i) => (
+                  <div key={rule.label} className="flex items-center gap-1.5">
+                    {securityRuleResults[i] ? (
+                      <Check className="w-3.5 h-3.5 text-secondary shrink-0" />
+                    ) : (
+                      <X className="w-3.5 h-3.5 text-destructive shrink-0" />
+                    )}
+                    <span className={`text-[11px] ${securityRuleResults[i] ? "text-secondary" : "text-muted-foreground"}`}>
+                      {rule.label}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Save Button */}
-        <div className="flex justify-end mt-6">
-          <Button onClick={handleSave} disabled={saving} className="gradient-primary">
-            {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : <><Save className="w-4 h-4 mr-2" /> Save Settings</>}
-          </Button>
-        </div>
-      </motion.div>
-
-      {/* Image Cropper Modal */}
-      {cropImageSrc && (
-        <ImageCropper src={cropImageSrc} onCropComplete={handleCropComplete} onCancel={handleCropCancel} />
-      )}
-
-      {/* AI Config Modal */}
-      <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingConfig ? 'Edit Profile' : 'New AI Profile'}</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="grid gap-2">
-              <Label>Profile Name</Label>
-              <Input value={configName} onChange={(e) => setConfigName(e.target.value)} placeholder="e.g., Default, Luxury Brand" />
+            <div className="space-y-2">
+              <Label className="text-foreground">Confirm New Password</Label>
+              <div className="relative">
+                <Input type={showConfirmPw ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" className="bg-muted/30 border-border text-foreground pr-10" />
+                <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                  {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-            
-            <div className="grid gap-2">
-              <Label>Business Name</Label>
-              <Input value={configBusinessName} onChange={(e) => setConfigBusinessName(e.target.value)} placeholder="Your business name" />
-            </div>
+            {confirmPassword.length > 0 && !securityPasswordsMatch && (
+              <p className="text-[11px] text-destructive px-1">Passwords do not match</p>
+            )}
 
-            <div className="grid gap-2">
-              <Label>Brand Tone</Label>
-              <Select value={configBrandTone} onValueChange={setConfigBrandTone}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {BRAND_TONES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Reply Mode</Label>
-              <Select value={configReplyMode} onValueChange={setConfigReplyMode}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {REPLY_MODES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <Label>Allow Emojis</Label>
-              <Switch checked={configEmojiAllowed} onCheckedChange={setConfigEmojiAllowed} />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfigModal(false)}>Cancel</Button>
-            <Button onClick={handleSaveConfig} disabled={!configName.trim()}>
-              {editingConfig ? 'Update' : 'Create'}
+            <Button
+              onClick={handleChangePassword}
+              disabled={!securityAllRulesPassed || !securityPasswordsMatch || currentPassword.length === 0}
+              className="gradient-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              Update Password
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </motion.div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

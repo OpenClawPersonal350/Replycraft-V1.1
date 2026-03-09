@@ -3,6 +3,8 @@ import { HeroSection } from "@/components/landing/HeroSection";
 import { SocialProof } from "@/components/landing/SocialProof";
 import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { DemoSection } from "@/components/landing/DemoSection";
+import { GlobeReviewFlow } from "@/components/landing/GlobeReviewFlow";
+import { ScrollFrameSection } from "@/components/landing/ScrollFrameSection";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { TestimonialsSection } from "@/components/landing/TestimonialsSection";
 import { CTASection } from "@/components/landing/CTASection";
@@ -15,7 +17,9 @@ const Index = () => {
       <HeroSection />
       <SocialProof />
       <FeaturesSection />
+      <GlobeReviewFlow />
       <DemoSection />
+      <ScrollFrameSection />
       <PricingSection />
       <TestimonialsSection />
       <CTASection />
