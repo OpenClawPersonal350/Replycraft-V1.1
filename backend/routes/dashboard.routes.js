@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth.middleware');
+const { authenticate } = require('../middleware/auth.middleware');
 const {
   getDashboardData,
   getStats,
@@ -15,7 +15,7 @@ const {
 } = require('../controllers/dashboard.controller');
 
 // Apply auth middleware to all routes
-router.use(authMiddleware);
+router.use(authenticate);
 
 // Dashboard routes
 router.get('/', getDashboardData);

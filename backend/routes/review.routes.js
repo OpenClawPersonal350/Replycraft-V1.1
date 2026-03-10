@@ -5,7 +5,8 @@
 
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth.middleware');
+const { authenticate, checkDailyLimit } = require('../middleware/auth.middleware');
+const { requirePremium } = require('../middleware/premium.middleware');
 const {
   getReviews,
   getReview,
@@ -17,14 +18,14 @@ const {
 } = require('../controllers/review.controller');
 
 // All routes require authentication
-router.get('/', authMiddleware, getReviews);
-router.get('/:id', authMiddleware, getReview);
+router.get('/', authenticate, getReviews);
+router.get('/:id', authenticate, getReview);
 
-// Actions
-router.post('/:id/generate', authMiddleware, generateReply);
-router.post('/:id/approve', authMiddleware, approveReply);
-router.put('/:id/edit', authMiddleware, updateReply);
-router.post('/:id/send', authMiddleware, sendReply);
-router.post('/:id/reject', authMiddleware, rejectReply);
+// Actions - some require premium
+router.post('/:id/generate', authenticate, requirePremium, checkDailyLimit, generateReply);
+router.post('/:id/approve', authenticate, approveReply);
+router.put('/:id/edit', authenticate, updateReply);
+router.post('/:id/send', authenticate, sendReply);
+router.post('/:id/reject', authenticate, rejectReply);
 
 module.exports = router;

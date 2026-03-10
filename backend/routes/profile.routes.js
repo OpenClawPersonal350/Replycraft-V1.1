@@ -267,7 +267,8 @@ const uploadAvatar = async (req, res) => {
 };
 
 // Apply auth middleware to all routes
-router.use(authMiddleware);
+const { authenticate } = require('../middleware/auth.middleware');
+router.use(authenticate);
 
 // Routes
 router.get('/profile', getProfile);

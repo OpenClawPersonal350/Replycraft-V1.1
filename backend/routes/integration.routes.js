@@ -1,11 +1,11 @@
 /**
  * Integration Routes
- * Google Business Profile connection management
+ * Platform connection management
  */
 
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth.middleware');
+const { authenticate } = require('../middleware/auth.middleware');
 const {
   connectGoogle,
   listIntegrations,
@@ -14,9 +14,9 @@ const {
 } = require('../controllers/integration.controller');
 
 // All routes require authentication
-router.post('/google/connect', authMiddleware, connectGoogle);
-router.get('/', authMiddleware, listIntegrations);
-router.get('/:id', authMiddleware, getIntegration);
-router.delete('/:id', authMiddleware, disconnectIntegration);
+router.post('/google/connect', authenticate, connectGoogle);
+router.get('/', authenticate, listIntegrations);
+router.get('/:id', authenticate, getIntegration);
+router.delete('/:id', authenticate, disconnectIntegration);
 
 module.exports = router;

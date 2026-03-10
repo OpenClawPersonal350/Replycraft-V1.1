@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth.middleware');
+const { authenticate } = require('../middleware/auth.middleware');
+const { requirePremium } = require('../middleware/premium.middleware');
 const analyticsController = require('../controllers/analytics.controller');
 
 // Apply auth middleware to all routes
-router.use(authMiddleware);
+router.use(authenticate);
 
 // GET /api/analytics/overview - Get analytics overview
 router.get('/overview', analyticsController.getOverview);
@@ -15,7 +16,7 @@ router.get('/reviews', analyticsController.getReviews);
 // GET /api/analytics/sentiment - Get sentiment analysis
 router.get('/sentiment', analyticsController.getSentiment);
 
-// GET /api/analytics/performance - Get reply performance metrics
-router.get('/performance', analyticsController.getReplyPerformance);
+// GET /api/analytics/performance - Get reply performance metrics (Premium only)
+router.get('/performance', requirePremium, analyticsController.getReplyPerformance);
 
 module.exports = router;
